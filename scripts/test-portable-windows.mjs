@@ -12,6 +12,8 @@ assert.equal(process.platform, 'win32');
 let root = path.resolve(process.argv[2]);
 const reportFile = path.resolve(process.argv[3] ?? 'portable-smoke-results.json');
 const results = [];
+let activeChild;
+let nativeOutput = '';
 const fixture = {
   accessToken: 'portable-fixture-access',
   refreshToken: 'portable-fixture-refresh',
@@ -82,8 +84,13 @@ async function openApp() {
       NO_PROXY: '127.0.0.1,localhost',
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} --host-resolver-rules="MAP *.115.com ~NOTFOUND"`,
     },
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
+  activeChild = child;
+  for (const stream of [child.stdout, child.stderr])
+    stream.on('data', (chunk) => {
+      nativeOutput = (nativeOutput + chunk).slice(-20000);
+    });
   const target = await until(
     async () => {
       if (child.exitCode !== null) throw Error(`Application exited: ${child.exitCode}`);
@@ -155,6 +162,7 @@ async function openApp() {
 }
 
 let app;
+let failure;
 try {
   app = await openApp();
   await check('all native application directories resolve inside adjacent data', async () => {
@@ -310,6 +318,29 @@ try {
       app = null;
     },
   );
+} catch (error) {
+  failure = String(error.stack ?? error);
+  console.error('NATIVE OUTPUT:', nativeOutput);
+  try {
+    console.error(
+      execFileSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-File',
+          path.join(import.meta.dirname, 'portable-diagnostics.ps1'),
+          '-AppPid',
+          String(activeChild?.pid ?? 0),
+          '-Root',
+          root,
+        ],
+        { encoding: 'utf8' },
+      ),
+    );
+  } catch (diagnosticError) {
+    console.error(diagnosticError.message);
+  }
+  throw error;
 } finally {
   if (app) {
     try {
@@ -318,10 +349,11 @@ try {
       app.child.kill();
     }
   }
+  if (activeChild?.exitCode === null) activeChild.kill();
   server.closeAllConnections();
   await new Promise((resolve) => server.close(resolve));
   await fs.writeFile(
     reportFile,
-    JSON.stringify({ platform: process.platform, results }, null, 2) + '\n',
+    JSON.stringify({ platform: process.platform, results, failure, nativeOutput }, null, 2) + '\n',
   );
 }

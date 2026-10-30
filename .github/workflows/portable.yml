@@ -7,12 +7,18 @@ on:
         description: 仅构建并验证 Windows 便携版
         type: boolean
         default: false
+      artifact_run_id:
+        description: 仅验证指定运行已生成的 Windows ZIP（不重新构建）
+        type: string
+        default: ''
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build:
+    if: inputs.artifact_run_id == ''
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -105,7 +111,7 @@ jobs:
 
   windows-2022:
     needs: build
-    if: always() && needs.build.result != 'cancelled'
+    if: inputs.artifact_run_id == '' && always() && needs.build.result != 'cancelled'
     runs-on: windows-2022
     timeout-minutes: 20
     steps:
@@ -130,5 +136,39 @@ jobs:
         if: always()
         with:
           name: portable-smoke-windows-2022
+          path: portable-smoke-results.json
+          if-no-files-found: ignore
+
+  verify-windows-archive:
+    if: inputs.artifact_run_id != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+      - uses: actions/download-artifact@v8
+        with:
+          name: portable-windows-x64
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: portable-download
+      - name: Test existing Windows ZIP
+        shell: pwsh
+        run: |
+          $testRoot = Join-Path $env:RUNNER_TEMP '便携测试 含空格'
+          New-Item $testRoot -ItemType Directory -Force | Out-Null
+          Expand-Archive (Get-ChildItem portable-download/*-portable.zip).FullName -DestinationPath $testRoot
+          node scripts/test-portable-windows.mjs (Join-Path $testRoot '115+') portable-smoke-results.json
+          if ($LASTEXITCODE -ne 0) { throw '便携包验证失败' }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: portable-smoke-${{ matrix.os }}
           path: portable-smoke-results.json
           if-no-files-found: ignore
