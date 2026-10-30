@@ -23,6 +23,10 @@ assert.equal(
   'The smoke test requires an empty, disposable data directory',
 );
 const results = [];
+const normalized = (value) => path.toNamespacedPath(path.resolve(value)).toLowerCase();
+const inside = (value, directory) =>
+  normalized(value) === normalized(directory) ||
+  normalized(value).startsWith(normalized(directory) + path.sep);
 let activeChild;
 let nativeOutput = '';
 const fixture = {
@@ -66,6 +70,7 @@ async function until(check, label, timeout = 45000) {
       const value = await check();
       if (value) return value;
     } catch (e) {
+      if (e.fatal) throw e;
       error = e;
     }
     await delay(150);
@@ -116,7 +121,8 @@ async function openApp() {
     });
   const target = await until(
     async () => {
-      if (child.exitCode !== null) throw Error(`Application exited: ${child.exitCode}`);
+      if (child.exitCode !== null)
+        throw Object.assign(Error(`Application exited: ${child.exitCode}`), { fatal: true });
       const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
       return targets.find(
         (entry) => entry.type === 'page' && entry.url.includes('tauri.localhost'),
@@ -191,9 +197,7 @@ try {
   await check('all native application directories resolve inside adjacent data', async () => {
     for (const directory of [13, 14, 15, 16, 17]) {
       const value = await app.invoke('plugin:path|resolve_directory', { directory });
-      assert.ok(
-        path.resolve(value).toLowerCase().startsWith(path.join(root, 'data').toLowerCase()),
-      );
+      assert.ok(inside(value, path.join(root, 'data')));
     }
     for (const file of ['downloads.db', 'uploads.db'])
       assert.ok((await fs.stat(path.join(root, 'data', file))).size > 0);
@@ -222,7 +226,7 @@ try {
     await app.invoke('plugin:pinia|patch', { id: 'user', state: fixture });
     await app.invoke('plugin:pinia|save_now', { id: 'user' });
     const userPath = await app.invoke('plugin:pinia|get_store_path', { id: 'user' });
-    assert.ok(userPath.toLowerCase().startsWith(path.join(root, 'data').toLowerCase()));
+    assert.ok(inside(userPath, path.join(root, 'data')));
     const saved = await fs.readFile(userPath, 'utf8');
     assert.ok(saved.includes(fixture.accessToken) && saved.includes(fixture.refreshToken));
     await app.evaluate(`localStorage.setItem('portable-fixture', 'persisted')`);
