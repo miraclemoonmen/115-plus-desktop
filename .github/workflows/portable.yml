@@ -17,20 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: windows-latest
-            name: windows-x64
-          - platform: macos-latest
-            name: macos-aarch64
-            target: aarch64-apple-darwin
-          - platform: macos-latest
-            name: macos-x64
-            target: x86_64-apple-darwin
-          - platform: ubuntu-latest
-            name: linux-x64
-        exclude:
-          - platform: ${{ inputs.windows_only && 'macos-latest' || 'none' }}
-          - platform: ${{ inputs.windows_only && 'ubuntu-latest' || 'none' }}
+        include: ${{ fromJSON(inputs.windows_only && '[{"platform":"windows-latest","name":"windows-x64"}]' || '[{"platform":"windows-latest","name":"windows-x64"},{"platform":"macos-latest","name":"macos-aarch64","target":"aarch64-apple-darwin"},{"platform":"macos-latest","name":"macos-x64","target":"x86_64-apple-darwin"},{"platform":"ubuntu-latest","name":"linux-x64"}]') }}
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7
@@ -49,6 +36,7 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+          cache-on-failure: true
       - name: Check code and both build modes
         shell: bash
         run: |
