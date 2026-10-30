@@ -536,3 +536,61 @@ test('repeated close requests share one confirmation and cancellation allows ret
     'exit',
   ]);
 });
+
+test('asking for a download directory still validates cloud names before joining and displays the validation error', async () => {
+  const { assertDownloadName } = loadTsModule('src/utils/downloadPath.ts', {
+    '@tauri-apps/api/path': { sep: () => '\\' },
+  });
+  const calls = [];
+  const { handleDownload } = loadDeclarations('src/views/Home/HomeView.vue', ['handleDownload'], {
+    settingStore: { downloadSetting: { askSavePath: true, downloadPath: 'C:\\Downloads' } },
+    assertDownloadName,
+    open: async () => {
+      calls.push('dialog');
+      return 'C:\\Downloads';
+    },
+    downloadFile: async (_file, target) => {
+      calls.push(target);
+    },
+    message: {
+      info: () => {},
+      error: (error) => {
+        calls.push(error);
+      },
+    },
+    console: { error: () => {} },
+  });
+  for (const fc of ['0', '1']) {
+    for (const fn of ['a:b', 'CON.txt', 'sub\\file.mp4']) {
+      calls.length = 0;
+      await handleDownload({ fn, fc });
+      assert.deepEqual(calls, [`文件名不支持保存到本地：${fn}`]);
+    }
+  }
+  calls.length = 0;
+  await handleDownload({ fn: '中文 视频.mp4', fc: '1' });
+  assert.deepEqual(calls, ['dialog', 'C:\\Downloads/中文 视频.mp4']);
+});
+
+test('batch download displays the specific nested-name validation error', async () => {
+  const errors = [];
+  const { handleBatchDownload } = loadDeclarations(
+    'src/views/Home/HomeView.vue',
+    ['handleBatchDownload'],
+    {
+      settingStore: { downloadSetting: { askSavePath: false } },
+      batchDownloadFiles: async () => {
+        throw Error('文件名不支持保存到本地：a:b');
+      },
+      message: {
+        info: () => {},
+        error: (error) => {
+          errors.push(error);
+        },
+      },
+      console: { error: () => {} },
+    },
+  );
+  await handleBatchDownload([{ fn: 'folder', fc: '0' }]);
+  assert.deepEqual(errors, ['文件名不支持保存到本地：a:b']);
+});

@@ -63,6 +63,7 @@
   import { CloudUploadOutlined } from '@vicons/antd';
   import type { MyFile } from '@/api/types/file';
   import { useDownloadManager } from '@/composables/useDownloadManager';
+  import { assertDownloadName } from '@/utils/downloadPath';
   import { useUploadManager } from '@/composables/useUploadManager';
   import { useUserStore } from '@/store/user';
   import { useSettingStore } from '@/store/setting';
@@ -147,6 +148,7 @@
     try {
       let targetPath: string | undefined;
       if (settingStore.downloadSetting.askSavePath) {
+        assertDownloadName(file.fn);
         const dir = await open({
           directory: true,
           multiple: false,
@@ -160,7 +162,7 @@
       await downloadFile(file, targetPath);
     } catch (error) {
       console.error(error);
-      message.error('下载任务添加失败');
+      message.error(error instanceof Error ? error.message : '下载任务添加失败');
     }
   };
 
@@ -182,7 +184,7 @@
       await batchDownloadFiles(files, targetDir);
     } catch (error) {
       console.error(error);
-      message.error('批量下载任务添加失败');
+      message.error(error instanceof Error ? error.message : '批量下载任务添加失败');
     }
   };
 

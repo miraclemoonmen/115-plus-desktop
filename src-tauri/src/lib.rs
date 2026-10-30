@@ -282,10 +282,8 @@ pub fn run() {
 
 /// 展示并聚焦主窗口（托盘点击、单实例唤醒等场景复用）。
 pub(crate) fn show_window(app: &AppHandle) -> Result<(), String> {
-    let windows = app.webview_windows();
-    let window = windows
-        .values()
-        .next()
+    let window = app
+        .get_webview_window("main")
         .ok_or_else(|| "未找到可用的主窗口".to_string())?;
 
     if window.is_minimized().unwrap_or(false) {
