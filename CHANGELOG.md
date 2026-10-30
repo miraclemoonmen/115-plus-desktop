@@ -1,5 +1,11 @@
 # 更新日志
 
+## [1.1.0-rc.2](https://github.com/miraclemoonmen/115-plus-desktop/compare/v1.1.0-rc.1...v1.1.0-rc.2) (2026-10-30)
+
+### 🐛 Bug 修复
+
+- 避免预发布导入空 macOS 签名证书 ([3af04be](https://github.com/miraclemoonmen/115-plus-desktop/commit/3af04be850a66371cc8148a9208115610c61b862))
+
 ## [1.1.0-rc.1](https://github.com/miraclemoonmen/115-plus-desktop/compare/v1.1.0-alpha.1...v1.1.0-rc.1) (2026-10-30)
 
 ### ✨ 新功能
