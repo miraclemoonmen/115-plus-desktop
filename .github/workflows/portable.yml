@@ -1,0 +1,138 @@
+name: Portable builds
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            name: windows-x64
+          - platform: macos-latest
+            name: macos-aarch64
+            target: aarch64-apple-darwin
+          - platform: macos-latest
+            name: macos-x64
+            target: x86_64-apple-darwin
+          - platform: ubuntu-latest
+            name: linux-x64
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/setup@v2
+        with:
+          runtime: node@lts
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target || '' }}
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - name: Check code and both build modes
+        shell: bash
+        run: |
+          pnpm check
+          pnpm test:rust
+          cargo test --manifest-path src-tauri/Cargo.toml --lib --features portable --locked
+      - name: Build Windows portable ZIP with fixed WebView2
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/build-portable-windows.ps1
+      - uses: actions/upload-artifact@v7
+        if: runner.os == 'Windows'
+        with:
+          name: portable-${{ matrix.name }}
+          path: |
+            src-tauri/target/portable/*-portable.zip
+            src-tauri/target/portable/*-portable.zip.sha256
+          if-no-files-found: error
+      - name: Test Windows portable application
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $testRoot = Join-Path $env:RUNNER_TEMP '便携测试 含空格'
+          New-Item $testRoot -ItemType Directory -Force | Out-Null
+          Expand-Archive -Path (Get-ChildItem 'src-tauri/target/portable/*-portable.zip').FullName -DestinationPath $testRoot
+          node scripts/test-portable-windows.mjs (Join-Path $testRoot '115+') portable-smoke-results.json
+          if ($LASTEXITCODE -ne 0) { throw 'Windows 便携运行测试失败' }
+      - name: Build macOS portable archive
+        if: runner.os == 'macOS'
+        env:
+          APPLE_SIGNING_IDENTITY: '-'
+          PORTABLE_TARGET: ${{ matrix.target }}
+          PORTABLE_NAME: ${{ matrix.name }}
+        run: |
+          pnpm tauri build --target "$PORTABLE_TARGET" --bundles app --config src-tauri/tauri.portable.conf.json
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p src-tauri/target/portable/115+/data
+          cp -R "src-tauri/target/$PORTABLE_TARGET/release/bundle/macos/115+.app" src-tauri/target/portable/115+/
+          cp docs/portable.md src-tauri/target/portable/115+/使用说明.md
+          codesign --verify --deep --strict src-tauri/target/portable/115+/115+.app
+          ditto -c -k --sequesterRsrc --keepParent src-tauri/target/portable/115+ "src-tauri/target/portable/115+_${VERSION}_${PORTABLE_NAME}-portable.zip"
+      - name: Build Linux portable archive
+        if: runner.os == 'Linux'
+        run: |
+          pnpm tauri build --bundles appimage --config src-tauri/tauri.portable.conf.json
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p src-tauri/target/portable/115+/data
+          cp src-tauri/target/release/bundle/appimage/*.AppImage src-tauri/target/portable/115+/115+.AppImage
+          cp docs/portable.md src-tauri/target/portable/115+/使用说明.md
+          tar -czf "src-tauri/target/portable/115+_${VERSION}_linux-x64-portable.tar.gz" -C src-tauri/target/portable 115+
+      - uses: actions/upload-artifact@v7
+        if: success() && runner.os != 'Windows'
+        with:
+          name: portable-${{ matrix.name }}
+          path: |
+            src-tauri/target/portable/*-portable.zip
+            src-tauri/target/portable/*-portable.zip.sha256
+            src-tauri/target/portable/*-portable.tar.gz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: always() && runner.os == 'Windows'
+        with:
+          name: portable-smoke-${{ matrix.name }}
+          path: portable-smoke-results.json
+          if-no-files-found: ignore
+
+  windows-2022:
+    needs: build
+    if: always() && needs.build.result != 'cancelled'
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+      - uses: actions/download-artifact@v8
+        with:
+          name: portable-windows-x64
+          path: portable-download
+      - name: Test the same ZIP on an older Windows kernel
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem portable-download/*-portable.zip
+          $testRoot = Join-Path $env:RUNNER_TEMP '便携测试 含空格'
+          New-Item $testRoot -ItemType Directory -Force | Out-Null
+          Expand-Archive $archive.FullName -DestinationPath $testRoot
+          node scripts/test-portable-windows.mjs (Join-Path $testRoot '115+') portable-smoke-results.json
+          if ($LASTEXITCODE -ne 0) { throw 'Windows 2022 便携运行测试失败' }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: portable-smoke-windows-2022
+          path: portable-smoke-results.json
+          if-no-files-found: ignore

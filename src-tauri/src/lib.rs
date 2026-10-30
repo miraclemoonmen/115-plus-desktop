@@ -31,12 +31,14 @@ use std::sync::Arc;
 
 use chrono::Local;
 use serde::Deserialize;
-use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tauri_plugin_log::{RotationStrategy, Target, TargetKind, TimezoneStrategy};
 use tauri_plugin_pinia::ManagerExt as PiniaManagerExt;
 use tauri_plugin_window_state::StateFlags;
 
 mod download;
+#[cfg(feature = "portable")]
+mod portable;
 mod proxy;
 mod subtitle;
 mod tray;
@@ -109,9 +111,25 @@ fn bind_log_level_to_setting_store<R: tauri::Runtime, M: Manager<R>>(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[allow(deprecated)]
 pub fn run() {
+    #[allow(unused_mut)]
+    let mut context = tauri::generate_context!();
+    #[cfg(feature = "portable")]
+    if let Err(error) = portable::prepare(&mut context) {
+        rfd::MessageDialog::new()
+            .set_title("115+")
+            .set_level(rfd::MessageLevel::Error)
+            .set_description(format!("便携版启动失败：{error}"))
+            .show();
+        std::process::exit(1);
+    }
     let log_file_name = Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // 便携版从原生侧也不注册安装更新命令。
+    #[cfg(not(feature = "portable"))]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
         // ---- 插件注册 ----
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -128,7 +146,6 @@ pub fn run() {
                 .timezone_strategy(TimezoneStrategy::UseLocal)
                 .build(),
         )
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_http::init())
@@ -151,6 +168,12 @@ pub fn run() {
         // ---- 窗口行为 ----
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
+                if cfg!(feature = "portable") && window.label() == "main" {
+                    api.prevent_close();
+                    // 复用已有的暂停任务和退出确认；便携版不强制隐藏驻留。
+                    let _ = window.emit("tray-quit", ());
+                    return;
+                }
                 window.hide().ok();
                 api.prevent_close(); // 关闭 → 隐藏到托盘，不退出
             }
@@ -238,7 +261,7 @@ pub fn run() {
             download::queue::download_resume_all,
         ])
         // ---- 运行 ----
-        .build(tauri::generate_context!())
+        .build(context)
         .unwrap_or_else(|err| panic!("Tauri 应用运行失败：{}", err))
         .run(|_app, event| {
             if let RunEvent::ExitRequested { code, api, .. } = event {
@@ -246,6 +269,8 @@ pub fn run() {
                 // code=0     → 前端 exit(0) → 托盘确认退出 → 放行
                 if code.is_none() {
                     api.prevent_exit();
+                    #[cfg(feature = "portable")]
+                    let _ = _app.emit("tray-quit", ());
                 }
             }
         });

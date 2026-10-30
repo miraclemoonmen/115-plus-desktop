@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Portable profiles may contain account credentials.
+data/
+src-tauri/runtime/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

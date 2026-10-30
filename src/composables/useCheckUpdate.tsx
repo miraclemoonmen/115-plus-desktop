@@ -6,6 +6,8 @@ import { useUploadManager } from '@/composables/useUploadManager';
 import { invoke } from '@tauri-apps/api/core';
 import { ask } from '@tauri-apps/plugin-dialog';
 import { filesize } from 'filesize';
+import { openUrl } from '@tauri-apps/plugin-opener';
+import { isPortable, releasesUrl } from '@/buildMode';
 import {
   NA,
   NAlert,
@@ -301,6 +303,12 @@ export const useCheckUpdate = () => {
   // `silent` 模式用于启动时后台检查，只在发现更新时给一个轻提示。
   async function checkForUpdate(options?: { silent?: boolean }) {
     const silent = options?.silent ?? false;
+
+    // 便携版只下载新压缩包，保留 data，不能启动安装版更新器。
+    if (isPortable) {
+      if (!silent) await openUrl(releasesUrl);
+      return;
+    }
 
     if (isChecking.value) return;
     isChecking.value = true;

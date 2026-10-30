@@ -44,6 +44,71 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 
+function updateFixture(portable) {
+  const source = fs.readFileSync(path.join(root, 'src/composables/useCheckUpdate.tsx'), 'utf8');
+  const ast = ts.createSourceFile(
+    'update.tsx',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  let updateFunction;
+  const visit = (node) => {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === 'checkForUpdate')
+      updateFunction = node;
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  const code = ts.transpileModule(
+    ts.createPrinter().printNode(ts.EmitHint.Unspecified, updateFunction, ast),
+    {
+      fileName: 'fixture.tsx',
+      compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, jsxFactory: 'h' },
+    },
+  ).outputText;
+  const calls = [];
+  const context = {
+    isPortable: portable,
+    releasesUrl: 'https://fixture.invalid/releases',
+    isChecking: { value: false },
+    openUrl: async (url) => calls.push(['open', url]),
+    resolveUpdateProxy: async () => {
+      calls.push(['proxy']);
+    },
+    check: async () => {
+      calls.push(['check']);
+      return { version: 'fixture' };
+    },
+    confirmAndInstall: async () => calls.push(['install']),
+    console,
+  };
+  const run = new Function(...Object.keys(context), code + '; return checkForUpdate;')(
+    ...Object.values(context),
+  );
+  return { run, calls, checking: context.isChecking };
+}
+
+test('portable manual update opens the release page without checking or installing', async () => {
+  const fixture = updateFixture(true);
+  await fixture.run({ silent: false });
+  assert.deepEqual(fixture.calls, [['open', 'https://fixture.invalid/releases']]);
+});
+
+test('portable startup never checks, downloads or installs updates', async () => {
+  const fixture = updateFixture(true);
+  await fixture.run({ silent: true });
+  assert.deepEqual(fixture.calls, []);
+  assert.equal(fixture.checking.value, false);
+});
+
+test('installed builds retain the existing update confirmation path', async () => {
+  const fixture = updateFixture(false);
+  await fixture.run();
+  assert.deepEqual(fixture.calls, [['proxy'], ['check'], ['install']]);
+  assert.equal(fixture.checking.value, false);
+});
+
 test('late file-list responses cannot replace the current folder or clear its loading state', async () => {
   const pending = [];
   const context = {

@@ -17,7 +17,11 @@
           <NFormItem label="退出时有传输任务不再提示" path="generalSetting.skipExitConfirm">
             <NSwitch v-model:value="settingStore.generalSetting.skipExitConfirm" />
           </NFormItem>
-          <NFormItem label="启动时自动检查更新" path="generalSetting.autoCheckUpdate">
+          <NFormItem
+            v-if="!isPortable"
+            label="启动时自动检查更新"
+            path="generalSetting.autoCheckUpdate"
+          >
             <NSwitch v-model:value="settingStore.generalSetting.autoCheckUpdate" />
           </NFormItem>
           <NFormItem label="接口速率限制" path="generalSetting.apiRateLimit">
@@ -346,6 +350,7 @@
 
 <script setup lang="ts">
   import { useSettingStore, type AppLogLevel } from '@/store/setting';
+  import { isPortable } from '@/buildMode';
   import type { SliderProps } from 'naive-ui';
   import { open } from '@tauri-apps/plugin-dialog';
   import { generateTextShadow } from '@/utils/subtitleStyleUtils';

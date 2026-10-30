@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "io.github.miraclemoonmen.115-plus-desktop.portable",
+  "build": {
+    "beforeBuildCommand": "pnpm build --mode portable",
+    "features": ["portable"]
+  },
+  "app": {
+    "appDirectoriesOverride": "./data"
+  },
+  "bundle": {
+    "createUpdaterArtifacts": false
+  }
+}

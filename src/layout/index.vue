@@ -153,6 +153,7 @@
   import { useUploadManager } from '@/composables/useUploadManager';
   import { useCheckUpdate } from '@/composables/useCheckUpdate';
   import { useFilePreview } from '@/composables/useFilePreview';
+  import { isPortable } from '@/buildMode';
 
   const route = useRoute();
   const userStore = useUserStore();
@@ -287,7 +288,7 @@
     }
 
     // 登录后自动检查更新
-    if (settingStore.generalSetting.autoCheckUpdate) {
+    if (!isPortable && settingStore.generalSetting.autoCheckUpdate) {
       void checkForUpdate({ silent: true });
     }
   });

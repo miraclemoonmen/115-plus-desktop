@@ -9,6 +9,7 @@
     <NDescriptions label-placement="left" bordered :column="1" class="max-w-lg w-full">
       <NDescriptionsItem label="应用版本">
         <NTag type="primary" size="small" round>v{{ appVersion }}</NTag>
+        <NTag v-if="isPortable" size="small" round class="ml-2">便携版</NTag>
       </NDescriptionsItem>
       <NDescriptionsItem label="Tauri 版本">
         <NTag type="info" size="small" round>v{{ tauriVersion }}</NTag>
@@ -40,7 +41,7 @@
         <template #icon>
           <NIcon><UpdateOutlined /></NIcon>
         </template>
-        检查更新
+        {{ isPortable ? '下载更新' : '检查更新' }}
       </NButton>
       <NButton @click="openUrl('https://github.com/lvzhenbo/115-plus-desktop/issues')">
         <template #icon>
@@ -83,6 +84,7 @@
   import { UpdateOutlined } from '@vicons/material';
   import LvzhenboAvatar from '@/assets/lvzhenbo.gif';
   import { useCheckUpdate } from '@/composables/useCheckUpdate';
+  import { isPortable } from '@/buildMode';
 
   const { isChecking, checkForUpdate } = useCheckUpdate();
 
