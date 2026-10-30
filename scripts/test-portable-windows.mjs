@@ -11,6 +11,17 @@ import { setTimeout as delay } from 'node:timers/promises';
 assert.equal(process.platform, 'win32');
 let root = path.resolve(process.argv[2]);
 const reportFile = path.resolve(process.argv[3] ?? 'portable-smoke-results.json');
+// Refuse to replace an existing user's profile when invoked outside a fresh CI extraction.
+assert.equal(
+  (
+    await fs.readdir(path.join(root, 'data')).catch((error) => {
+      if (error.code === 'ENOENT') return [];
+      throw error;
+    })
+  ).length,
+  0,
+  'The smoke test requires an empty, disposable data directory',
+);
 const results = [];
 let activeChild;
 let nativeOutput = '';
@@ -73,23 +84,35 @@ async function openApp() {
   await new Promise((resolve) => portServer.listen(0, '127.0.0.1', resolve));
   const port = portServer.address().port;
   await new Promise((resolve) => portServer.close(resolve));
-  const child = spawn(path.join(root, '115+.exe'), [], {
-    // Deliberately unrelated to the executable directory.
-    cwd: process.env.TEMP,
-    env: {
-      ...process.env,
-      HTTP_PROXY: 'http://127.0.0.1:9',
-      HTTPS_PROXY: 'http://127.0.0.1:9',
-      ALL_PROXY: 'http://127.0.0.1:9',
-      NO_PROXY: '127.0.0.1,localhost',
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} --host-resolver-rules="MAP *.115.com ~NOTFOUND"`,
+  const child = spawn(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-File',
+      path.join(import.meta.dirname, 'start-portable-test.ps1'),
+      '-Exe',
+      path.join(root, '115+.exe'),
+    ],
+    {
+      // Deliberately unrelated to the executable directory.
+      cwd: process.env.TEMP,
+      env: {
+        ...process.env,
+        HTTP_PROXY: 'http://127.0.0.1:9',
+        HTTPS_PROXY: 'http://127.0.0.1:9',
+        ALL_PROXY: 'http://127.0.0.1:9',
+        NO_PROXY: '127.0.0.1,localhost',
+        WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} --host-resolver-rules="MAP *.115.com ~NOTFOUND"`,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  );
   activeChild = child;
   for (const stream of [child.stdout, child.stderr])
     stream.on('data', (chunk) => {
       nativeOutput = (nativeOutput + chunk).slice(-20000);
+      const found = /PORTABLE_APP_PID=(\d+)/.exec(nativeOutput);
+      if (found) child.appPid = Number(found[1]);
     });
   const target = await until(
     async () => {
@@ -150,7 +173,7 @@ async function openApp() {
     // Send WM_CLOSE to this disposable CI app, exercising the actual close/exit bridge.
     const closed = execFileSync(
       'powershell.exe',
-      ['-NoProfile', '-Command', `(Get-Process -Id ${child.pid}).CloseMainWindow()`],
+      ['-NoProfile', '-Command', `(Get-Process -Id ${child.appPid}).CloseMainWindow()`],
       { encoding: 'utf8' },
     );
     assert.equal(closed.trim(), 'True');
@@ -330,7 +353,7 @@ try {
           '-File',
           path.join(import.meta.dirname, 'portable-diagnostics.ps1'),
           '-AppPid',
-          String(activeChild?.pid ?? 0),
+          String(activeChild?.appPid ?? activeChild?.pid ?? 0),
           '-Root',
           root,
         ],
@@ -349,7 +372,11 @@ try {
       app.child.kill();
     }
   }
-  if (activeChild?.exitCode === null) activeChild.kill();
+  if (activeChild?.exitCode === null) {
+    if (activeChild.appPid)
+      execFileSync('taskkill.exe', ['/PID', String(activeChild.appPid), '/T', '/F']);
+    activeChild.kill();
+  }
   server.closeAllConnections();
   await new Promise((resolve) => server.close(resolve));
   await fs.writeFile(
