@@ -99,6 +99,10 @@ fn runtime_directory(directory: &Path) -> Result<PathBuf, String> {
     // 解析映射盘、链接等实际位置后再检查，不改系统运行库或安全策略。
     let runtime = fs::canonicalize(runtime).map_err(|e| format!("无法读取内置 WebView2：{e}"))?;
     check_runtime_location(&runtime)?;
+    let directory = fs::canonicalize(directory).map_err(|e| format!("无法读取程序目录：{e}"))?;
+    if runtime.parent() != Some(directory.as_path()) {
+        return Err("runtime 不能指向程序目录外的位置，请重新解压完整便携包后重试。".into());
+    }
     Ok(runtime)
 }
 
