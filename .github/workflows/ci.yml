@@ -53,15 +53,23 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
-      - name: Create .env.local file
+      - name: Check code and tests
         run: |
-          if [ -f .env ]; then
-            cp .env .env.local
-          else
-            touch .env.local
+          pnpm run check
+          pnpm run test:rust
+
+      - name: Create .env.local file
+        env:
+          APP_ID: ${{ secrets.APP_ID || vars.APP_ID }}
+          APP_KEY: ${{ secrets.APP_KEY }}
+        run: |
+          cp .env .env.local
+          if [ -n "$APP_ID" ]; then
+            printf 'VITE_APP_ID=%s\n' "$APP_ID" >> .env.local
           fi
-          echo "VITE_APP_ID=${{ secrets.APP_ID }}" >> .env.local
-          echo "VITE_APP_KEY=${{ secrets.APP_KEY }}" >> .env.local
+          if [ -n "$APP_KEY" ]; then
+            printf 'VITE_APP_KEY=%s\n' "$APP_KEY" >> .env.local
+          fi
         shell: bash
 
       # MSI 与 RPM 都无法表达 semver 预发布版本号（如 1.1.0-alpha.1）：

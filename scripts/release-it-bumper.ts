@@ -70,7 +70,7 @@ export default class BumperPlugin extends Plugin {
   /**
    * bump 之后、git commit 之前：
    *   1) 校验所有版本文件一致
-   *   2) 重新生成 Cargo.lock
+   *   2) 更新工作区版本，保留 Cargo.lock 中的依赖版本
    */
   async beforeRelease(): Promise<void> {
     const version = this.config.getContext().version as string;
@@ -78,8 +78,8 @@ export default class BumperPlugin extends Plugin {
 
     await this.validateVersions(version);
 
-    this.log.exec('cargo generate-lockfile --manifest-path src-tauri/Cargo.toml');
-    await this.exec('cargo generate-lockfile --manifest-path src-tauri/Cargo.toml');
+    this.log.exec('cargo update --workspace --manifest-path src-tauri/Cargo.toml');
+    await this.exec('cargo update --workspace --manifest-path src-tauri/Cargo.toml');
     this.log.verbose('  Cargo.lock 已更新');
   }
 

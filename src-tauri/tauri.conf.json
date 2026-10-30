@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "115+",
-  "identifier": "io.github.lvzhenbo.115-plus-desktop",
+  "identifier": "io.github.miraclemoonmen.115-plus-desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -57,9 +57,9 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZBNzAzQzJGRjFCNEVCODkKUldTSjY3VHhMenh3YW5YaHVSM2ZNaUdXWkxBbHNSNUx2RFZEaFhIRDVOdktvMHJvK1U3NzFtbC8K",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDAwNjdENzU5M0Q4RUJFNUIKUldSYnZvNDlXZGRuQUVpUk5QRTlKNkNsWThXS0J5NVdOWnhxSVZiVlNYSTdlMXhvMmMyenY4SWwK",
       "endpoints": [
-        "https://github.com/lvzhenbo/115-plus-desktop/releases/latest/download/latest.json"
+        "https://github.com/miraclemoonmen/115-plus-desktop/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

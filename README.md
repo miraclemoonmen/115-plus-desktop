@@ -1,12 +1,12 @@
 # 115+ 桌面客户端
 
-![GitHub License](https://img.shields.io/github/license/lvzhenbo/115-plus-desktop) ![GitHub Release](https://img.shields.io/github/v/release/lvzhenbo/115-plus-desktop) ![GitHub Actions](https://img.shields.io/github/actions/workflow/status/lvzhenbo/115-plus-desktop/ci.yml)
+![GitHub License](https://img.shields.io/github/license/miraclemoonmen/115-plus-desktop) ![GitHub Release](https://img.shields.io/github/v/release/miraclemoonmen/115-plus-desktop) ![GitHub Actions](https://img.shields.io/github/actions/workflow/status/miraclemoonmen/115-plus-desktop/ci.yml)
 
 基于 [115 网盘开放平台](https://open.115.com/) 的第三方开源桌面客户端，使用 **Tauri 2** + **Vue 3** + **TypeScript** 构建，支持文件管理、原生高速下载、OSS 分片上传和 HLS 视频播放。
 
 ## 下载
 
-前往 [Releases](https://github.com/lvzhenbo/115-plus-desktop/releases) 下载最新稳定版本安装包，也可到 [GitHub Actions](https://github.com/lvzhenbo/115-plus-desktop/actions) 下载 CI 流水线产物。
+本分支安装包以 [Releases](https://github.com/miraclemoonmen/115-plus-desktop/releases) 为准，也可到 [GitHub Actions](https://github.com/miraclemoonmen/115-plus-desktop/actions) 下载 CI 测试产物。
 
 支持 Windows、macOS 和 Linux 平台，**目前非 Windows 平台正在处于测试状态，欢迎有相关环境和设备的用户使用CI构建测试，一起来推进 1.1.0 版本。**
 
@@ -26,6 +26,8 @@
 - [x] 文件详情查看
 - [x] 新建文件夹
 - [x] 文件搜索
+- [x] 星标文件（与 115 网盘同步）
+- [x] 文件分类筛选
 
 ### 文件下载
 
@@ -49,10 +51,10 @@
 - [x] 播放进度记忆与恢复
 - [x] 视频字幕
 
-### 云下载（离线下载）
+### 云下载
 
-- [x] 链接离线下载
-- [ ] BT 种子解析下载
+- [x] 链接云下载
+- [x] BT 种子解析下载
 - [x] 云下载任务列表与管理
 - [x] 下载配额查看
 - [x] 任务文件直接打开
@@ -100,7 +102,7 @@ src/                          # 前端源码
 │   └── RenameModal/          # 重命名
 ├── composables/              # 组合式函数（下载/上传管理、更新检查、字幕控制等）
 ├── layout/                   # 布局组件
-│   └── components/           # 布局子组件（离线下载弹窗、搜索弹窗）
+│   └── components/           # 布局子组件（云下载弹窗、搜索弹窗）
 ├── router/                   # 路由配置
 ├── store/                    # Pinia 状态管理
 ├── styles/                   # 样式文件（Tailwind CSS）
@@ -109,7 +111,7 @@ src/                          # 前端源码
 │   └── subtitles/            # 字幕解析与渲染（ASS/文本）
 └── views/                    # 页面视图
     ├── About/                # 关于
-    ├── CloudDownload/        # 云下载（离线下载）
+    ├── CloudDownload/        # 云下载
     ├── Download/             # 下载管理
     ├── Home/                 # 首页（文件列表）
     ├── Login/                # 登录
@@ -177,3 +179,12 @@ QQ群：[978180785](https://qm.qq.com/q/s2vhxOL8uk)
 ## 许可证
 
 [MIT](LICENSE)
+
+## 发布检查
+
+- 提交前运行 `pnpm check`、`pnpm test:rust` 和 `pnpm build`；CI 和发布构建会执行同样的代码及回归检查。
+- `.env` 保留当前使用的公开 AppID；可在 `.env.local` 或仓库变量 `APP_ID` 覆盖。构建时 AppID 为空会直接报错。
+- 本分支使用独立应用标识和更新地址，不接收原作者的自动更新。原作者版本的数据目录不自动迁移。
+- 更新签名公钥位于 `src-tauri/tauri.conf.json`。对应私钥应保存在仓库外，并配置为 GitHub Secret `TAURI_SIGNING_PRIVATE_KEY`；设置过密码时同时配置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。正式发布后不要随意更换密钥。
+- macOS 正式发布还需配置 `APPLE_CERTIFICATE`、`APPLE_CERTIFICATE_PASSWORD`、`APPLE_SIGNING_IDENTITY`、`APPLE_ID`、`APPLE_PASSWORD` 和 `APPLE_TEAM_ID`。`APPLE_PASSWORD` 使用应用专用密码，证书使用 Developer ID Application，详见 [Tauri 签名与公证说明](https://v2.tauri.app/distribute/sign/macos/)。缺少凭证时正式发布工作流会停止，普通 CI 测试构建不要求这些凭证。
+- 发布前用正式安装包验证安装、登录、断网恢复、暂停续传、文件冲突处理和应用升级；通过后再调整版本号。当前仍保留 alpha 版本号。

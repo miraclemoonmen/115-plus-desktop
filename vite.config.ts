@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import vueJsx from '@vitejs/plugin-vue-jsx';
 import vueDevTools from 'vite-plugin-vue-devtools';
@@ -12,63 +12,68 @@ import { fileURLToPath } from 'url';
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vitejs.dev/config/
-export default defineConfig(async () => ({
-  plugins: [
-    vue(),
-    vueJsx(),
-    vueDevTools(),
-    AutoImport({
-      imports: [
-        'vue',
-        'vue-router',
-        'pinia',
-        {
-          'naive-ui': [
-            'useDialog',
-            'useMessage',
-            'useNotification',
-            'useLoadingBar',
-            'useOsTheme',
-            'useThemeVars',
-          ],
-          '@tauri-apps/api/core': ['invoke'],
-        },
-        '@vueuse/core',
-      ],
-    }),
-    Components({
-      resolvers: [NaiveUiResolver(), MotionResolver()],
-    }),
-    tailwindcss(),
-  ],
+export default defineConfig(({ command, mode }) => {
+  if (command === 'build' && !loadEnv(mode, process.cwd(), 'VITE_').VITE_APP_ID?.trim()) {
+    throw new Error('未配置 VITE_APP_ID，无法构建可登录的安装包');
+  }
+  return {
+    plugins: [
+      vue(),
+      vueJsx(),
+      vueDevTools(),
+      AutoImport({
+        imports: [
+          'vue',
+          'vue-router',
+          'pinia',
+          {
+            'naive-ui': [
+              'useDialog',
+              'useMessage',
+              'useNotification',
+              'useLoadingBar',
+              'useOsTheme',
+              'useThemeVars',
+            ],
+            '@tauri-apps/api/core': ['invoke'],
+          },
+          '@vueuse/core',
+        ],
+      }),
+      Components({
+        resolvers: [NaiveUiResolver(), MotionResolver()],
+      }),
+      tailwindcss(),
+    ],
 
-  // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
-  //
-  // 1. prevent vite from obscuring rust errors
-  clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
-  server: {
-    port: 1420,
-    strictPort: true,
-    host: host || false,
-    hmr: host
-      ? {
-          protocol: 'ws',
-          host,
-          port: 1421,
-        }
-      : undefined,
-    watch: {
-      // 3. tell vite to ignore watching `src-tauri`
-      ignored: ['**/src-tauri/**'],
+    // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
+    //
+    // 1. prevent vite from obscuring rust errors
+    clearScreen: false,
+    // 2. tauri expects a fixed port, fail if that port is not available
+    server: {
+      port: 1420,
+      strictPort: true,
+      host: host || false,
+      hmr: host
+        ? {
+            protocol: 'ws',
+            host,
+            port: 1421,
+          }
+        : undefined,
+      watch: {
+        // 3. tell vite to ignore watching `src-tauri`
+        ignored: ['**/src-tauri/**'],
+      },
     },
-  },
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+      },
     },
-  },
-  build: {
-    chunkSizeWarningLimit: 1000,
-  },
-}));
+    build: {
+      chunkSizeWarningLimit: 1000,
+    },
+  };
+});

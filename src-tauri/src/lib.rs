@@ -144,7 +144,6 @@ pub fn run() {
                         log::warn!("单实例唤醒主窗口失败：{}", err);
                     }
                 })
-                .dbus_id("io.github.lvzhenbo.oof-plus-desktop")
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
@@ -221,6 +220,7 @@ pub fn run() {
             download::events::url::download_provide_url,
             download::queue::download_enqueue_file,
             download::queue::download_set_max_concurrent,
+            download::queue::download_set_max_retry,
             download::queue::download_set_speed_limit,
             download::queue::download_pause_task,
             download::queue::download_cancel_task,
