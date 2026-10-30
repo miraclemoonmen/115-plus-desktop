@@ -4,6 +4,7 @@ import { fileDownloadUrl, fileList } from '@/api/file';
 import type { MyFile } from '@/api/types/file';
 import { useSettingStore } from '@/store/setting';
 import { useUserStore } from '@/store/user';
+import { assertDownloadName } from '@/utils/downloadPath';
 
 // 下载列表前端桥接层。
 //
@@ -397,6 +398,7 @@ export const useDownloadManager = createSharedComposable(() => {
     }
 
     for (const item of res.data) {
+      assertDownloadName(item.fn);
       if (item.fc === '0') {
         // 子文件夹：拼接相对路径继续递归
         const subPath = currentPath ? `${currentPath}/${item.fn}` : item.fn;
@@ -436,6 +438,7 @@ export const useDownloadManager = createSharedComposable(() => {
     customParentPath?: string,
   ) => {
     const parentGid = folder.gid ?? `folder-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    if (customParentPath === undefined) assertDownloadName(folder.name);
     const parentPath =
       customParentPath ?? `${settingStore.downloadSetting.downloadPath}/${folder.name}`;
 
@@ -511,6 +514,7 @@ export const useDownloadManager = createSharedComposable(() => {
 
     if (file.fc === '0') {
       // 文件夹下载
+      if (targetPath === undefined) assertDownloadName(file.fn);
       const folderParentPath = targetPath ?? `${downloadPath}/${file.fn}`;
       await enqueueCollectedFolder(
         {
@@ -530,6 +534,7 @@ export const useDownloadManager = createSharedComposable(() => {
         return;
       }
 
+      if (targetPath === undefined) assertDownloadName(fileData.file_name);
       const savePath = targetPath ?? `${downloadPath}/${fileData.file_name}`;
 
       await invokeDownloadCommand('download_enqueue_file', {
@@ -553,6 +558,7 @@ export const useDownloadManager = createSharedComposable(() => {
   const batchDownload = async (files: MyFile[], targetDir?: string) => {
     for (const file of files) {
       if (targetDir !== undefined) {
+        assertDownloadName(file.fn);
         const customPath = `${targetDir}/${file.fn}`;
         await download(file, customPath);
       } else {

@@ -44,6 +44,8 @@ pub fn prepare(context: &mut tauri::Context<tauri::Wry>) -> Result<(), String> {
     // current_binary 正确处理 AppImage 的挂载路径；根目录与启动时的工作目录无关。
     let binary =
         tauri::process::current_binary(&tauri::Env::default()).map_err(|e| e.to_string())?;
+    #[cfg(windows)]
+    let runtime = runtime_directory(binary.parent().ok_or("无法确定程序目录")?)?;
     let data = data_directory(&binary).map_err(|e| e.to_string())?;
     check_writable(&data).map_err(|e| {
         format!(
@@ -53,17 +55,39 @@ pub fn prepare(context: &mut tauri::Context<tauri::Wry>) -> Result<(), String> {
     })?;
 
     #[cfg(windows)]
-    prepare_runtime(binary.parent().ok_or("无法确定程序目录")?)?;
+    prepare_runtime(&runtime)?;
 
     context.config_mut().app.app_directories_override = Some(AppDirectoriesOverride::Root(data));
     Ok(())
 }
 
-#[cfg(windows)]
-fn prepare_runtime(directory: &Path) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-    use winreg::{RegKey, enums::HKEY_LOCAL_MACHINE};
+pub fn fail(error: impl std::fmt::Display) -> ! {
+    rfd::MessageDialog::new()
+        .set_title("115+")
+        .set_level(rfd::MessageLevel::Error)
+        .set_description(format!("便携版启动失败：{error}"))
+        .show();
+    std::process::exit(1);
+}
 
+#[cfg(windows)]
+fn check_runtime_location(runtime: &Path) -> Result<(), String> {
+    use std::path::{Component, Prefix};
+
+    if matches!(
+        runtime.components().next(),
+        Some(Component::Prefix(prefix))
+            if matches!(prefix.kind(), Prefix::UNC(..) | Prefix::VerbatimUNC(..))
+    ) {
+        return Err(
+            "内置 WebView2 不支持从网络目录运行。请将整个程序文件夹移到本地磁盘后重试。".into(),
+        );
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn runtime_directory(directory: &Path) -> Result<PathBuf, String> {
     let runtime = directory.join("runtime");
     for name in ["msedgewebview2.exe", "msedge.dll", "icudtl.dat"] {
         if !runtime.join(name).is_file() {
@@ -72,6 +96,16 @@ fn prepare_runtime(directory: &Path) -> Result<(), String> {
             );
         }
     }
+    // 解析映射盘、链接等实际位置后再检查，不改系统运行库或安全策略。
+    let runtime = fs::canonicalize(runtime).map_err(|e| format!("无法读取内置 WebView2：{e}"))?;
+    check_runtime_location(&runtime)?;
+    Ok(runtime)
+}
+
+#[cfg(windows)]
+fn prepare_runtime(runtime: &Path) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    use winreg::{RegKey, enums::HKEY_LOCAL_MACHINE};
 
     let build = RegKey::predef(HKEY_LOCAL_MACHINE)
         .open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")
@@ -85,9 +119,9 @@ fn prepare_runtime(directory: &Path) -> Result<(), String> {
         let system_root = std::env::var_os("SystemRoot").ok_or("无法确定 Windows 系统目录")?;
         let output =
             std::process::Command::new(Path::new(&system_root).join("System32/icacls.exe"))
-                .arg(&runtime)
+                .arg(runtime)
                 .args([
-                    "/grant:r",
+                    "/grant",
                     "*S-1-15-2-1:(OI)(CI)(RX)",
                     "*S-1-15-2-2:(OI)(CI)(RX)",
                 ])
@@ -106,6 +140,73 @@ fn prepare_runtime(directory: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn network_runtime_is_rejected_but_local_long_paths_are_allowed() {
+        for path in [r"\\server\share\runtime", r"\\?\UNC\server\share\runtime"] {
+            assert!(check_runtime_location(Path::new(path)).is_err());
+        }
+        for path in [r"C:\便携目录\runtime", r"\\?\C:\便携目录 含空格\runtime"] {
+            assert!(check_runtime_location(Path::new(path)).is_ok());
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn incomplete_runtime_is_rejected_without_creating_data() {
+        let dir = std::env::temp_dir().join(format!("115-runtime-{}", uuid::Uuid::new_v4()));
+        let runtime = dir.join("runtime");
+        fs::create_dir_all(&runtime).unwrap();
+        for name in ["msedgewebview2.exe", "msedge.dll"] {
+            fs::write(runtime.join(name), b"fixture").unwrap();
+        }
+        assert!(runtime_directory(&dir).is_err());
+        assert!(!dir.join("data").exists());
+        fs::write(runtime.join("icudtl.dat"), b"fixture").unwrap();
+        assert_eq!(
+            runtime_directory(&dir).unwrap(),
+            fs::canonicalize(runtime).unwrap()
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn runtime_permission_setup_preserves_existing_grants_and_nearby_files() {
+        let dir = std::env::temp_dir().join(format!("115-acl-{}", uuid::Uuid::new_v4()));
+        let runtime = dir.join("runtime");
+        fs::create_dir_all(&runtime).unwrap();
+        let nearby = dir.join("untouched.txt");
+        fs::write(&nearby, b"keep").unwrap();
+        let icacls =
+            PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("System32/icacls.exe");
+        let before = std::process::Command::new(&icacls)
+            .arg(&nearby)
+            .output()
+            .unwrap();
+        assert!(before.status.success());
+        let grant = std::process::Command::new(&icacls)
+            .arg(&runtime)
+            .args(["/grant", "*S-1-15-2-1:(W)"])
+            .output()
+            .unwrap();
+        assert!(grant.status.success());
+        prepare_runtime(&fs::canonicalize(&runtime).unwrap()).unwrap();
+        let permissions = std::process::Command::new(&icacls)
+            .arg(&runtime)
+            .output()
+            .unwrap();
+        let permissions = String::from_utf8_lossy(&permissions.stdout);
+        assert!(permissions.contains("(W)") || permissions.contains(",W)"));
+        let after = std::process::Command::new(icacls)
+            .arg(&nearby)
+            .output()
+            .unwrap();
+        assert_eq!(before.stdout, after.stdout);
+        assert_eq!(fs::read(nearby).unwrap(), b"keep");
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn data_stays_next_to_the_binary_with_spaces_and_unicode() {

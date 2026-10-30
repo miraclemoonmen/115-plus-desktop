@@ -15,6 +15,7 @@ import { ask } from '@tauri-apps/plugin-dialog';
 import { useDownloadManager } from './useDownloadManager';
 import { useUploadManager } from './useUploadManager';
 import { useSettingStore } from '@/store/setting';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 export const useAppExit = createSharedComposable(() => {
   const { hasActiveDownloads, pauseAllTasks: pauseAllDownloads } = useDownloadManager();
@@ -31,7 +32,8 @@ export const useAppExit = createSharedComposable(() => {
 
   /** 初始化托盘退出事件监听（幂等，重复调用安全） */
   const init = async () => {
-    if (unlisten) return;
+    // App.vue 也在播放器窗口挂载，退出只交给主窗口处理。
+    if (unlisten || getCurrentWindow().label !== 'main') return;
 
     unlisten = await listen('tray-quit', async () => {
       const active = hasActiveDownloads.value || hasActiveUploads.value;

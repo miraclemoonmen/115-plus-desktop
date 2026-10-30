@@ -15,7 +15,7 @@ if ($Action -eq 'Enable') {
         $hadValue = $item.GetValueNames() -contains $name
         if ($hadValue) { $previous = $item.GetValue($name) }
     }
-    New-Item $key -Force | Out-Null
+    if (!$hadKey) { New-Item $key -Force | Out-Null }
     New-ItemProperty $key -Name $name -Value "--remote-debugging-port=$Port --host-resolver-rules=`"MAP *.115.com ~NOTFOUND`"" -PropertyType String -Force | Out-Null
     @{hadKey=$hadKey;hadValue=$hadValue;value=$previous} | ConvertTo-Json -Compress
 } else {

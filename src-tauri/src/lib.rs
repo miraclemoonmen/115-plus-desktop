@@ -115,12 +115,7 @@ pub fn run() {
     let mut context = tauri::generate_context!();
     #[cfg(feature = "portable")]
     if let Err(error) = portable::prepare(&mut context) {
-        rfd::MessageDialog::new()
-            .set_title("115+")
-            .set_level(rfd::MessageLevel::Error)
-            .set_description(format!("便携版启动失败：{error}"))
-            .show();
-        std::process::exit(1);
+        portable::fail(error);
     }
     let log_file_name = Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
 
@@ -168,7 +163,11 @@ pub fn run() {
         // ---- 窗口行为 ----
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                if cfg!(feature = "portable") && window.label() == "main" {
+                // 播放器等子窗口正常关闭，只有主窗口需要退出确认或隐藏到托盘。
+                if window.label() != "main" {
+                    return;
+                }
+                if cfg!(feature = "portable") {
                     api.prevent_close();
                     // 复用已有的暂停任务和退出确认；便携版不强制隐藏驻留。
                     let _ = window.emit("tray-quit", ());
@@ -262,7 +261,12 @@ pub fn run() {
         ])
         // ---- 运行 ----
         .build(context)
-        .unwrap_or_else(|err| panic!("Tauri 应用运行失败：{}", err))
+        .unwrap_or_else(|err| {
+            #[cfg(feature = "portable")]
+            portable::fail(err);
+            #[cfg(not(feature = "portable"))]
+            panic!("Tauri 应用运行失败：{}", err);
+        })
         .run(|_app, event| {
             if let RunEvent::ExitRequested { code, api, .. } = event {
                 // code=None  → 系统快捷键（Cmd+Q / Alt+F4）→ 阻止，窗口已隐藏

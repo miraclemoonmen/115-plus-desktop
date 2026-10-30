@@ -405,3 +405,104 @@ test('transfer rows preserve original task references and native pause commands'
     } else assert.equal(calls[0][0], source);
   }
 });
+
+function loadTsModule(file, imports, globals = {}) {
+  const { outputText } = ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  });
+  const exports = {};
+  new Function('require', 'exports', ...Object.keys(globals), outputText)(
+    (name) => {
+      assert.ok(name in imports, `Unexpected import: ${name}`);
+      return imports[name];
+    },
+    exports,
+    ...Object.values(globals),
+  );
+  return exports;
+}
+
+test('Windows download names cannot escape the selected directory or become device names or streams', () => {
+  const { assertDownloadName } = loadTsModule('src/utils/downloadPath.ts', {
+    '@tauri-apps/api/path': { sep: () => '\\' },
+  });
+  for (const name of [
+    '',
+    '.',
+    '..',
+    '../outside',
+    'sub/file.mp4',
+    'sub\\file.mp4',
+    'C:\\outside',
+    'file:stream',
+    'CON',
+    'nul.txt',
+    'COM1.mp4',
+    'LPT².txt',
+    'CONIN$',
+    'file.',
+    'file ',
+    'file?.mp4',
+    'line\nbreak',
+    'a\0b',
+  ])
+    assert.throws(() => assertDownloadName(name), /文件名不支持保存到本地/);
+  for (const name of ['中文 视频.mp4', 'CONCERT.mp4', 'COM10.txt', '.hidden', 'a.b.c'])
+    assert.doesNotThrow(() => assertDownloadName(name));
+});
+
+test('download name checks retain valid POSIX names', () => {
+  const { assertDownloadName } = loadTsModule('src/utils/downloadPath.ts', {
+    '@tauri-apps/api/path': { sep: () => '/' },
+  });
+  for (const name of ['a:b', 'CON.txt', 'name.', 'name ', 'back\\slash'])
+    assert.doesNotThrow(() => assertDownloadName(name));
+  for (const name of ['..', '../outside', 'sub/file', 'a\0b'])
+    assert.throws(() => assertDownloadName(name));
+});
+
+test('only the main window handles application exit, preventing a second confirmation or exit from the player', async () => {
+  let subscriptions = 0;
+  let exits = 0;
+  for (const label of ['main', 'video-player']) {
+    let callback;
+    const emptyManager = {
+      hasActiveDownloads: { value: false },
+      hasActiveUploads: { value: false },
+      pauseAllTasks: async () => {},
+    };
+    const { useAppExit } = loadTsModule(
+      'src/composables/useAppExit.ts',
+      {
+        '@tauri-apps/api/event': {
+          listen: async (_event, handler) => {
+            subscriptions++;
+            callback = handler;
+            return () => {};
+          },
+        },
+        '@tauri-apps/api/window': { getCurrentWindow: () => ({ label }) },
+        '@tauri-apps/plugin-process': {
+          exit: async () => {
+            exits++;
+          },
+        },
+        '@tauri-apps/plugin-dialog': {
+          ask: async () => {
+            throw Error('Unexpected confirmation');
+          },
+        },
+        './useDownloadManager': { useDownloadManager: () => emptyManager },
+        './useUploadManager': { useUploadManager: () => emptyManager },
+        '@/store/setting': { useSettingStore: () => ({ generalSetting: {} }) },
+      },
+      { createSharedComposable: (create) => create },
+    );
+    const appExit = useAppExit();
+    await appExit.init();
+    await appExit.init();
+    if (callback) await callback();
+  }
+  assert.equal(subscriptions, 1);
+  assert.equal(exits, 1);
+});
