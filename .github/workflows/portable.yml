@@ -3,6 +3,10 @@ name: Portable builds
 on:
   workflow_dispatch:
     inputs:
+      skip_runtime_tests:
+        description: 不启动应用，仅执行代码检查与平台构建
+        type: boolean
+        default: false
       checks_only:
         description: 仅执行 Windows 代码与单元测试（不启动应用或操作页面）
         type: boolean
@@ -22,7 +26,7 @@ permissions:
 
 jobs:
   windows-check:
-    if: inputs.checks_only
+    if: inputs.checks_only || inputs.skip_runtime_tests
     strategy:
       fail-fast: false
       matrix:
@@ -95,7 +99,7 @@ jobs:
             src-tauri/target/portable/*-portable.zip.sha256
           if-no-files-found: error
       - name: Test Windows portable application
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !inputs.skip_runtime_tests
         shell: pwsh
         run: |
           $testRoot = Join-Path $env:RUNNER_TEMP '便携测试 含空格'
@@ -136,7 +140,7 @@ jobs:
             src-tauri/target/portable/*-portable.tar.gz
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
-        if: always() && runner.os == 'Windows'
+        if: always() && runner.os == 'Windows' && !inputs.skip_runtime_tests
         with:
           name: portable-smoke-${{ matrix.name }}
           path: portable-smoke-results.json
@@ -144,7 +148,7 @@ jobs:
 
   windows-2022:
     needs: build
-    if: ${{ !inputs.checks_only && inputs.artifact_run_id == '' && always() && needs.build.result != 'cancelled' }}
+    if: ${{ !inputs.checks_only && !inputs.skip_runtime_tests && inputs.artifact_run_id == '' && always() && needs.build.result != 'cancelled' }}
     runs-on: windows-2022
     timeout-minutes: 20
     steps:
@@ -173,7 +177,7 @@ jobs:
           if-no-files-found: ignore
 
   verify-windows-archive:
-    if: ${{ !inputs.checks_only && inputs.artifact_run_id != '' }}
+    if: ${{ !inputs.checks_only && !inputs.skip_runtime_tests && inputs.artifact_run_id != '' }}
     strategy:
       fail-fast: false
       matrix:
