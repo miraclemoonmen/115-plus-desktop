@@ -1,3 +1,5 @@
+# 更新日志
+
 ## [1.1.0-rc.3](https://github.com/miraclemoonmen/115-plus-desktop/compare/v1.1.0-rc.2...v1.1.0-rc.3) (2026-10-30)
 
 ### ✨ 新功能
@@ -13,8 +15,6 @@
 - Windows 静态链接 VC 运行库，校验内置 WebView2 SHA256；兼容 Windows 10 所需的运行库目录读取权限。
 - 补充更新流程回归及便携路径、写入保护测试，加入 Windows 两个运行环境的原生应用验证。
 - 安装版继续使用原有的存储位置与更新流程。
-
-# 更新日志
 
 ## [1.1.0-rc.2](https://github.com/miraclemoonmen/115-plus-desktop/compare/v1.1.0-alpha.1...v1.1.0-rc.2) (2026-10-30)
 

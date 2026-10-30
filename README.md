@@ -8,7 +8,7 @@
 
 便携版将程序、Windows 内置运行库与 `data` 一起分发，解压后运行；账号凭证、设置和传输数据库保存在程序旁，更新时保留 `data`。详细使用方式与平台限制见[便携版说明](docs/portable.md)。
 
-当前候选版：[v1.1.0-rc.2](https://github.com/miraclemoonmen/115-plus-desktop/releases/tag/v1.1.0-rc.2)（预发布），提供 Windows x64、macOS Apple Silicon / Intel 和 Linux x64 安装包。
+当前候选版：[v1.1.0-rc.3](https://github.com/miraclemoonmen/115-plus-desktop/releases/tag/v1.1.0-rc.3)（便携预发布），提供 Windows x64、macOS Apple Silicon / Intel 和 Linux x64 便携包。安装包可使用 [v1.1.0-rc.2](https://github.com/miraclemoonmen/115-plus-desktop/releases/tag/v1.1.0-rc.2)。
 
 本分支安装包以 [Releases](https://github.com/miraclemoonmen/115-plus-desktop/releases) 为准，也可到 [GitHub Actions](https://github.com/miraclemoonmen/115-plus-desktop/actions) 下载 CI 测试产物。
 
