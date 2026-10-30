@@ -1,10 +1,12 @@
 # 115+ 桌面客户端
 
-![GitHub License](https://img.shields.io/github/license/miraclemoonmen/115-plus-desktop) ![GitHub Release](https://img.shields.io/github/v/release/miraclemoonmen/115-plus-desktop) ![GitHub Actions](https://img.shields.io/github/actions/workflow/status/miraclemoonmen/115-plus-desktop/ci.yml)
+![GitHub License](https://img.shields.io/github/license/miraclemoonmen/115-plus-desktop) ![GitHub Release](https://img.shields.io/github/v/release/miraclemoonmen/115-plus-desktop?include_prereleases) ![GitHub Actions](https://img.shields.io/github/actions/workflow/status/miraclemoonmen/115-plus-desktop/ci.yml)
 
 基于 [115 网盘开放平台](https://open.115.com/) 的第三方开源桌面客户端，使用 **Tauri 2** + **Vue 3** + **TypeScript** 构建，支持文件管理、原生高速下载、OSS 分片上传和 HLS 视频播放。
 
 ## 下载
+
+当前候选版：[v1.1.0-rc.2](https://github.com/miraclemoonmen/115-plus-desktop/releases/tag/v1.1.0-rc.2)（预发布），提供 Windows x64、macOS Apple Silicon / Intel 和 Linux x64 安装包。
 
 本分支安装包以 [Releases](https://github.com/miraclemoonmen/115-plus-desktop/releases) 为准，也可到 [GitHub Actions](https://github.com/miraclemoonmen/115-plus-desktop/actions) 下载 CI 测试产物。
 
