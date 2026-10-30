@@ -1,5 +1,26 @@
 # 更新日志
 
+## [1.1.0-rc.1](https://github.com/miraclemoonmen/115-plus-desktop/compare/v1.1.0-alpha.1...v1.1.0-rc.1) (2026-10-30)
+
+### ✨ 新功能
+
+- 右键菜单支持多选批量操作 ([6718982](https://github.com/miraclemoonmen/115-plus-desktop/commit/6718982c893ba0a3c2390ec33a8aafb98e9ea978))
+- 完善星标、BT 云下载与文件列表并修复传输可靠性 ([6c24f3f](https://github.com/miraclemoonmen/115-plus-desktop/commit/6c24f3f1632bb59647e66a3b08ee70064f9f5be7))
+
+### 🐛 Bug 修复
+
+- 修复搜索结果打开目录时导航被取消的问题 ([42ab0f9](https://github.com/miraclemoonmen/115-plus-desktop/commit/42ab0f9cad1fb8d82b086867eda55512e9a11911))
+- 修复收藏夹面板状态在主页与弹窗间共享的问题 ([fbe0eee](https://github.com/miraclemoonmen/115-plus-desktop/commit/fbe0eeeb3e4cb298ff6b4c0628103a3c1fcde5db))
+
+### 🔧 其他更新
+
+- 更新依赖 ([f458063](https://github.com/miraclemoonmen/115-plus-desktop/commit/f4580632e4e79c63d10e30ae413ad6f157ccc706))
+- 更新依赖 ([99d0b6e](https://github.com/miraclemoonmen/115-plus-desktop/commit/99d0b6ed4fc469a4a099cf00eb0559812805a8f6))
+
+### 👷 CI 配置
+
+- 预发布构建时跳过 RPM 打包 ([9b83a5a](https://github.com/miraclemoonmen/115-plus-desktop/commit/9b83a5ad6a85457cbebe47bcfec933a9663f9822))
+
 ## [1.1.0-alpha.1](https://github.com/lvzhenbo/115-plus-desktop/compare/v1.1.0-alpha.0...v1.1.0-alpha.1) (2026-09-16)
 
 ### ✨ 新功能
