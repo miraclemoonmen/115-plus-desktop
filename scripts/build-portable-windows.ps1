@@ -18,6 +18,18 @@ try {
         throw 'WebView2 SHA256 校验失败'
     }
 
+    $expanded = Join-Path $output 'webview2-expanded'
+    if (Test-Path $expanded) { Remove-Item $expanded -Recurse -Force }
+    New-Item $expanded -ItemType Directory | Out-Null
+    & expand.exe $cab '-F:*' $expanded | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'WebView2 解压失败' }
+    $browser = @(Get-ChildItem $expanded -Filter msedgewebview2.exe -Recurse)
+    if ($browser.Count -ne 1) { throw 'WebView2 文件结构异常' }
+    $runtimeSource = Join-Path $repoRoot 'src-tauri/runtime'
+    if (Test-Path $runtimeSource) { Remove-Item $runtimeSource -Recurse -Force }
+    Move-Item $browser[0].Directory.FullName $runtimeSource
+    if (Test-Path $expanded) { Remove-Item $expanded -Recurse -Force }
+
     if (!$SkipBuild) {
         # Avoid a separate Visual C++ redistributable on clean Windows machines.
         $env:RUSTFLAGS = "$originalRustFlags -C target-feature=+crt-static".Trim()
@@ -34,19 +46,12 @@ try {
     $dumpbin = Get-ChildItem "$vs/VC/Tools/MSVC/*/bin/Hostx64/x64/dumpbin.exe" | Select-Object -Last 1
     $dependencies = & $dumpbin.FullName /DEPENDENTS (Join-Path $stage '115+.exe')
     if ($LASTEXITCODE -ne 0) { throw '无法检查 EXE 依赖' }
-    if (($dependencies -join "`n") -match '(?im)^\s+(VCRUNTIME|MSVCP|CONCRT)\w*\.dll') {
+    if (($dependencies -join "`n") -match '(?im)^\s+(VCRUNTIME|MSVCP|CONCRT)\d\w*\.dll') {
         throw '便携 EXE 仍依赖额外的 Visual C++ 运行库'
     }
+    Write-Output $dependencies
     $dependencies | Set-Content (Join-Path $output 'exe-dependencies.txt')
-    $expanded = Join-Path $output 'webview2-expanded'
-    if (Test-Path $expanded) { Remove-Item $expanded -Recurse -Force }
-    New-Item $expanded -ItemType Directory | Out-Null
-    & expand.exe $cab '-F:*' $expanded | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'WebView2 解压失败' }
-    $browser = @(Get-ChildItem $expanded -Filter msedgewebview2.exe -Recurse)
-    if ($browser.Count -ne 1) { throw 'WebView2 文件结构异常' }
-    Move-Item $browser[0].Directory.FullName (Join-Path $stage 'runtime')
-    if (Test-Path $expanded) { Remove-Item $expanded -Recurse -Force }
+    Copy-Item $runtimeSource (Join-Path $stage 'runtime') -Recurse
     New-Item (Join-Path $stage 'data') -ItemType Directory | Out-Null
     Copy-Item 'docs/portable.md' (Join-Path $stage '使用说明.md')
     $archive = Join-Path $output "115+_$($package.version)_windows-x64-portable.zip"
