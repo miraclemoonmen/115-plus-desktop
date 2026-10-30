@@ -461,48 +461,78 @@ test('download name checks retain valid POSIX names', () => {
     assert.throws(() => assertDownloadName(name));
 });
 
-test('only the main window handles application exit, preventing a second confirmation or exit from the player', async () => {
-  let subscriptions = 0;
-  let exits = 0;
-  for (const label of ['main', 'video-player']) {
-    let callback;
-    const emptyManager = {
-      hasActiveDownloads: { value: false },
-      hasActiveUploads: { value: false },
-      pauseAllTasks: async () => {},
-    };
-    const { useAppExit } = loadTsModule(
-      'src/composables/useAppExit.ts',
-      {
-        '@tauri-apps/api/event': {
-          listen: async (_event, handler) => {
-            subscriptions++;
-            callback = handler;
-            return () => {};
-          },
+function appExitFixture(label, active = false, confirm = async () => false) {
+  const fixture = { calls: [], handler: undefined };
+  const manager = (kind) => ({
+    hasActiveDownloads: { value: active },
+    hasActiveUploads: { value: false },
+    pauseAllTasks: async () => {
+      fixture.calls.push(`pause-${kind}`);
+    },
+  });
+  const { useAppExit } = loadTsModule(
+    'src/composables/useAppExit.ts',
+    {
+      '@tauri-apps/api/event': {
+        listen: async (_event, handler) => {
+          fixture.calls.push('listen');
+          fixture.handler = handler;
+          return () => {};
         },
-        '@tauri-apps/api/window': { getCurrentWindow: () => ({ label }) },
-        '@tauri-apps/plugin-process': {
-          exit: async () => {
-            exits++;
-          },
-        },
-        '@tauri-apps/plugin-dialog': {
-          ask: async () => {
-            throw Error('Unexpected confirmation');
-          },
-        },
-        './useDownloadManager': { useDownloadManager: () => emptyManager },
-        './useUploadManager': { useUploadManager: () => emptyManager },
-        '@/store/setting': { useSettingStore: () => ({ generalSetting: {} }) },
       },
-      { createSharedComposable: (create) => create },
-    );
-    const appExit = useAppExit();
-    await appExit.init();
-    await appExit.init();
-    if (callback) await callback();
+      '@tauri-apps/api/window': { getCurrentWindow: () => ({ label }) },
+      '@tauri-apps/plugin-process': {
+        exit: async () => {
+          fixture.calls.push('exit');
+        },
+      },
+      '@tauri-apps/plugin-dialog': {
+        ask: async () => {
+          fixture.calls.push('ask');
+          return confirm();
+        },
+      },
+      './useDownloadManager': { useDownloadManager: () => manager('downloads') },
+      './useUploadManager': { useUploadManager: () => manager('uploads') },
+      '@/store/setting': { useSettingStore: () => ({ generalSetting: {} }) },
+    },
+    { createSharedComposable: (create) => create },
+  );
+  fixture.app = useAppExit();
+  return fixture;
+}
+
+test('only the main window handles application exit, preventing a second confirmation or exit from the player', async () => {
+  const main = appExitFixture('main');
+  const player = appExitFixture('video-player');
+  for (const fixture of [main, player]) {
+    await fixture.app.init();
+    await fixture.app.init();
+    if (fixture.handler) await fixture.handler();
   }
-  assert.equal(subscriptions, 1);
-  assert.equal(exits, 1);
+  assert.deepEqual(main.calls, ['listen', 'exit']);
+  assert.deepEqual(player.calls, []);
+});
+
+test('repeated close requests share one confirmation and cancellation allows retry', async () => {
+  let confirmation = deferred();
+  const fixture = appExitFixture('main', true, () => confirmation.promise);
+  await fixture.app.init();
+  const first = fixture.handler();
+  await fixture.handler();
+  assert.deepEqual(fixture.calls, ['listen', 'ask']);
+  confirmation.resolve(false);
+  await first;
+  confirmation = deferred();
+  const retry = fixture.handler();
+  confirmation.resolve(true);
+  await retry;
+  assert.deepEqual(fixture.calls, [
+    'listen',
+    'ask',
+    'ask',
+    'pause-downloads',
+    'pause-uploads',
+    'exit',
+  ]);
 });

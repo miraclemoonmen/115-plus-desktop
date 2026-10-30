@@ -23,6 +23,7 @@ export const useAppExit = createSharedComposable(() => {
   const settingStore = useSettingStore();
 
   let unlisten: (() => void) | null = null;
+  let closing = false;
 
   /** 暂停所有传输任务并退出应用 */
   const pauseAndClose = async () => {
@@ -36,27 +37,33 @@ export const useAppExit = createSharedComposable(() => {
     if (unlisten || getCurrentWindow().label !== 'main') return;
 
     unlisten = await listen('tray-quit', async () => {
-      const active = hasActiveDownloads.value || hasActiveUploads.value;
+      if (closing) return;
+      closing = true;
+      try {
+        const active = hasActiveDownloads.value || hasActiveUploads.value;
 
-      if (!active) {
-        await exit(0);
-        return;
-      }
+        if (!active) {
+          await exit(0);
+          return;
+        }
 
-      if (settingStore.generalSetting.skipExitConfirm) {
-        await pauseAndClose();
-        return;
-      }
+        if (settingStore.generalSetting.skipExitConfirm) {
+          await pauseAndClose();
+          return;
+        }
 
-      const confirmed = await ask('当前有正在进行的传输任务，确定退出？', {
-        title: '提示',
-        kind: 'warning',
-        okLabel: '确定',
-        cancelLabel: '取消',
-      });
+        const confirmed = await ask('当前有正在进行的传输任务，确定退出？', {
+          title: '提示',
+          kind: 'warning',
+          okLabel: '确定',
+          cancelLabel: '取消',
+        });
 
-      if (confirmed) {
-        await pauseAndClose();
+        if (confirmed) {
+          await pauseAndClose();
+        }
+      } finally {
+        closing = false;
       }
     });
   };
