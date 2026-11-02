@@ -29,6 +29,7 @@
   const emit = defineEmits<{
     close: [];
     open: [];
+    openLocation: [];
     reload: [];
     download: [];
     uploadFile: [];
@@ -47,6 +48,15 @@
       {
         label: '打开',
         key: 'open',
+        icon: () => (
+          <NIcon>
+            <FolderOpenOutlined />
+          </NIcon>
+        ),
+      },
+      {
+        label: '打开所在文件夹',
+        key: 'openLocation',
         icon: () => (
           <NIcon>
             <FolderOpenOutlined />
@@ -122,6 +132,7 @@
       {
         label: props.targetItem?.ism === '1' ? '取消星标' : '添加星标',
         key: 'toggleStar',
+        disabled: props.targetItem?.ism === '',
         icon: () => (
           <NIcon color={props.targetItem?.ism === '1' ? 'var(--warning-color)' : undefined}>
             {props.targetItem?.ism === '1' ? <StarFilled /> : <StarOutlined />}
@@ -283,6 +294,7 @@
   function handleSelect(key: string) {
     const eventMap: Record<string, () => void> = {
       open: () => emit('open'),
+      openLocation: () => emit('openLocation'),
       reload: () => emit('reload'),
       download: () => emit('download'),
       uploadFile: () => emit('uploadFile'),

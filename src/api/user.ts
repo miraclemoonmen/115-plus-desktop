@@ -31,6 +31,7 @@ export const qrCodeStatus = (params: QrCodeStatusRequestParams) =>
     cacheFor: null,
     meta: {
       authRole: null,
+      silentError: true,
     },
   });
 

@@ -38,14 +38,22 @@
     <!-- 主区域 -->
     <div class="flex flex-1 overflow-hidden min-h-0">
       <ExplorerView
+        ref="viewRef"
         :items="filteredItems"
         :view-mode="viewMode"
         :loading="loading"
         :selected-items="selectedItems"
-        :sort-config="sortConfig"
+        :sort-config="props.searchSource ? undefined : sortConfig"
         :show-checkbox="props.showCheckbox"
         :columns="props.columns"
-        :sort-disabled="isSearching"
+        :sort-disabled="isSearching || !!props.searchSource"
+        :empty-description="
+          props.searchSource
+            ? props.searchSource.params.search_value
+              ? '暂无数据'
+              : '请输入搜索内容'
+            : undefined
+        "
         @click-item="handleItemClick"
         @dblclick-item="handleItemDblClick"
         @contextmenu-item="handleItemContextMenu"
@@ -54,7 +62,11 @@
         @clear-selection="clearSelection"
         @check-item="handleCheckItem"
         @toggle-select-all="handleToggleSelectAll"
-      />
+      >
+        <template v-if="$slots.name" #name="slotProps"
+          ><slot name="name" v-bind="slotProps"
+        /></template>
+      </ExplorerView>
     </div>
 
     <!-- 状态栏 -->
@@ -79,6 +91,9 @@
       :show="contextMenuActions"
       @close="closeContextMenu"
       @open="handleOpen"
+      @open-location="
+        contextMenuState.targetItem && emit('open-location', contextMenuState.targetItem)
+      "
       @reload="handleRefresh"
       @download="handleDownload"
       @upload-file="handleUploadFiles"
@@ -124,6 +139,8 @@
   import type {
     FileDetail,
     FileListRequestParams,
+    FileListResponseData,
+    FileSearchRequestParams,
     MyFile,
     Path,
     SearchFile,
@@ -134,6 +151,9 @@
   import { useModalQuerySync } from '@/composables/useModalQuerySync';
   import { useSettingStore } from '@/store/setting';
   import type { MediaSource } from '@/utils/media';
+  import { findFilePage } from '@/utils/fileLocation';
+  import { useFileSearch } from '@/composables/useFileSearch';
+  import { fileContextMenuActions } from './types';
 
   const dialog = useDialog();
   const message = useMessage();
@@ -153,19 +173,7 @@
     'viewToggle',
   ];
 
-  const allContextMenuActions: ContextMenuAction[] = [
-    'open',
-    'reload',
-    'download',
-    'uploadFile',
-    'copy',
-    'move',
-    'rename',
-    'batchRename',
-    'detail',
-    'delete',
-    'toggleStar',
-  ];
+  const allContextMenuActions = fileContextMenuActions;
 
   const props = withDefaults(
     defineProps<{
@@ -180,6 +188,10 @@
       starred?: boolean;
       /** 目录导航委托给外部处理（主页会写入路由，由 URL 变化驱动加载），默认直接本地跳转 */
       deferNavigation?: boolean;
+      /** 首次进入目录时定位指定文件，普通目录与弹窗无需传入。 */
+      locateId?: string;
+      /** 可选搜索数据源，目录与文件夹选择器保持原有加载方式。 */
+      searchSource?: { params: FileSearchRequestParams; active: boolean };
     }>(),
     {
       showCheckbox: true,
@@ -191,6 +203,8 @@
       enableSearch: false,
       starred: false,
       deferNavigation: false,
+      locateId: undefined,
+      searchSource: undefined,
     },
   );
 
@@ -213,6 +227,9 @@
     'upload-folder': [];
     'open-file': [file: MyFile];
     'navigate-request': [cid: string];
+    'open-location': [file: MyFile];
+    'search-page-change': [page: number];
+    'search-size-change': [size: number];
   }>();
 
   const cid = defineModel<string>('cid', { default: '0' });
@@ -222,7 +239,7 @@
   });
 
   onMounted(() => {
-    getFileList();
+    if (!props.searchSource) void navigate(cid.value, false, props.locateId).catch(() => {});
   });
 
   // ============ 状态 ============
@@ -232,6 +249,7 @@
   const path = ref<Path[]>([]);
   const selectedItems = ref<Set<string>>(new Set());
   const lastClickedId = ref<string | null>(null);
+  const viewRef = useTemplateRef('viewRef');
   const forderTemp = ref(new Map<string, number>());
 
   // 搜索状态
@@ -262,6 +280,9 @@
     nf: props.onlyFolder ? 1 : 0,
   });
 
+  const searched = useFileSearch(() =>
+    props.searchSource?.active ? props.searchSource.params : null,
+  );
   // 右键菜单
   const contextMenuState = ref({
     visible: false,
@@ -269,6 +290,31 @@
     y: 0,
     targetItem: null as MyFile | null,
   });
+
+  watch(
+    () => props.searchSource?.params,
+    (query) => {
+      if (!query || !props.searchSource?.active) return;
+      pagination.pageSize = query.limit;
+      pagination.page = Math.floor(query.offset / query.limit) + 1;
+    },
+    { immediate: true },
+  );
+  watch(
+    [searched.data, searched.count, searched.loading],
+    () => {
+      if (!props.searchSource) return;
+      closeContextMenu();
+      data.value = searched.data.value.map(searchFileToMyFile);
+      pagination.itemCount = searched.count.value;
+      loading.value = searched.loading.value;
+      clearSelection();
+      const lastPage = Math.max(1, Math.ceil(searched.count.value / (pagination.pageSize || 50)));
+      if (props.searchSource.active && !searched.loading.value && (pagination.page || 1) > lastPage)
+        emit('search-page-change', lastPage);
+    },
+    { immediate: true },
+  );
 
   // 弹窗状态
   const detailModalShow = ref(false);
@@ -309,8 +355,47 @@
   });
 
   let listRequest = 0;
+  const viewActive = ref(true);
+  let pendingScroll: string | undefined;
+  function scrollToSelection() {
+    if (viewActive.value && pendingScroll && selectedItems.value.has(pendingScroll)) {
+      viewRef.value?.scrollToFile(pendingScroll);
+      pendingScroll = undefined;
+    }
+  }
+  onActivated(async () => {
+    viewActive.value = true;
+    explorerShortcuts.register(shortcutToken);
+    await nextTick();
+    scrollToSelection();
+  });
+  onDeactivated(() => {
+    viewActive.value = false;
+    explorerShortcuts.unregister(shortcutToken);
+    pendingScroll = undefined;
+    listRequest++;
+    loading.value = false;
+    closeContextMenu();
+    detailModalShow.value = false;
+  });
+
+  function applyFileList(res: FileListResponseData) {
+    data.value = res.data;
+    pagination.itemCount = res.count;
+    path.value = res.path.map((item) => ({
+      ...item,
+      cid: normalizeCid(item.cid),
+      name: props.starred ? '星标文件' : item.name,
+    }));
+    clearSelection();
+  }
 
   const getFileList = async () => {
+    if (props.searchSource) {
+      searched.refresh();
+      return;
+    }
+    pendingScroll = undefined;
     const request = ++listRequest;
     params.cid = normalizeCid(params.cid);
     if (params.cid && !params.type) forderTemp.value.set(params.cid, pagination.page || 1);
@@ -320,15 +405,7 @@
     try {
       const res = await fileList(getListParams());
       if (request !== listRequest) return;
-      data.value = res.data;
-      pagination.itemCount = res.count;
-      // 根目录项的 cid 是数字 0，统一成字符串，避免下游用真值判断时被丢弃
-      path.value = res.path.map((item) => ({
-        ...item,
-        cid: normalizeCid(item.cid),
-        name: props.starred ? '星标文件' : item.name,
-      }));
-      clearSelection();
+      applyFileList(res);
     } finally {
       if (request === listRequest) loading.value = false;
     }
@@ -363,7 +440,7 @@
       fvs: 0,
       ic: '',
       is_top: 0,
-      ism: '0',
+      ism: '',
       isp: 0,
       ispl: 0,
       iss: 0,
@@ -371,7 +448,7 @@
       isv: 0,
       multitrack: 0,
       opt: 0,
-      pc: '',
+      pc: sf.pick_code,
       play_long: 0,
       v_img: '',
     };
@@ -462,7 +539,7 @@
 
   async function handleToggleStar() {
     const item = contextMenuState.value.targetItem;
-    if (!item || starUpdating) return;
+    if (!item || starUpdating || item.ism === '') return;
     const star = item.ism === '1' ? 0 : 1;
     starUpdating = true;
     try {
@@ -575,7 +652,7 @@
     handleOpen();
   }
 
-  function handleItemContextMenu(item: MyFile, event: MouseEvent) {
+  async function handleItemContextMenu(item: MyFile, event: MouseEvent) {
     if (!selectedItems.value.has(item.fid)) {
       toggleSelect(item, false);
     }
@@ -585,6 +662,15 @@
       y: event.clientY,
       targetItem: item,
     };
+    if (props.searchSource || isSearching.value) {
+      try {
+        const { data: detail } = await fileDetail({ file_id: item.fid }).send(true);
+        const mark = String(detail.is_mark);
+        if (['0', '1'].includes(mark)) item.ism = mark;
+      } catch {
+        /* 接口层已显示错误，普通文件操作仍可继续。 */
+      }
+    }
   }
 
   function handleBgContextMenu(event: MouseEvent) {
@@ -623,6 +709,10 @@
   };
 
   const handlePageChange = (page: number) => {
+    if (props.searchSource) {
+      emit('search-page-change', page);
+      return;
+    }
     pagination.page = page;
     if (isSearching.value) {
       handleSearchPage();
@@ -632,6 +722,10 @@
   };
 
   const handlePageSizeChange = (size: number) => {
+    if (props.searchSource) {
+      emit('search-size-change', size);
+      return;
+    }
     pagination.pageSize = size;
     params.limit = size;
     pagination.page = 1;
@@ -743,7 +837,14 @@
 
   const handleDetail = async () => {
     if (!contextMenuState.value.targetItem) return;
+    const request = listRequest;
     const res = await fileDetail({ file_id: contextMenuState.value.targetItem.fid });
+    if (
+      !viewActive.value ||
+      request !== listRequest ||
+      (props.deferNavigation && route.name !== ownerRouteName)
+    )
+      return;
     fileDetailData.value = res.data;
     detailModalShow.value = true;
   };
@@ -762,7 +863,10 @@
 
   // 仅主页场景（deferNavigation）下让弹窗参与全局回退：
   // 打开弹窗会写入路由 query，侧键 / 快捷键回退时优先关闭最上层弹窗。
-  const modalQueryEnabled = () => props.deferNavigation;
+  const route = useRoute();
+  const ownerRouteName = route.name;
+  const modalQueryEnabled = () =>
+    props.deferNavigation && viewActive.value && route.name === ownerRouteName;
 
   useModalQuerySync(folderModalShow, 'folder', modalQueryEnabled);
   useModalQuerySync(newFolderModalShow, 'newFolder', modalQueryEnabled);
@@ -785,8 +889,9 @@
   });
 
   /** 组件根 DOM（NEl 渲染出的 div）。 */
+  const instance = getCurrentInstance();
   const rootElement = (): HTMLElement | null => {
-    const el = getCurrentInstance()?.proxy?.$el;
+    const el = instance?.proxy?.$el;
     return el instanceof HTMLElement ? el : null;
   };
 
@@ -809,7 +914,8 @@
   };
 
   /** 快捷键是否应由当前实例处理：位于实例栈顶且未被弹窗遮挡。 */
-  const shouldHandleShortcut = () => explorerShortcuts.isTop(shortcutToken) && !isCoveredByModal();
+  const shouldHandleShortcut = () =>
+    viewActive.value && explorerShortcuts.isTop(shortcutToken) && !isCoveredByModal();
 
   // `dedupe` 让 vueuse 忽略按住按键产生的重复事件（避免 F5 连发请求、Delete 连弹确认框）。
   onKeyStroke(
@@ -852,13 +958,52 @@
   // ============ 对外暴露 ============
 
   /** 目录切换入口：cid 兼容数字（接口根目录为 0）与空值，统一按字符串处理。 */
-  function navigate(cid?: string | number, resetPage = false) {
+  function navigate(cid?: string | number, resetPage = false, targetId?: string) {
+    exitSearchMode();
     if (cid !== undefined && cid !== null) {
       params.cid = normalizeCid(cid);
       params.type = undefined;
       pagination.page = resetPage ? 1 : forderTemp.value.get(params.cid) || 1;
     }
-    getFileList();
+    if (targetId) return revealFile(targetId);
+    return getFileList();
+  }
+
+  async function revealFile(fid: string) {
+    const request = ++listRequest;
+    loading.value = true;
+    pendingScroll = undefined;
+    data.value = [];
+    path.value = [];
+    pagination.itemCount = 0;
+    clearSelection();
+    cid.value = params.cid || '0';
+    try {
+      const found = await findFilePage(
+        getListParams(),
+        fid,
+        pagination.pageSize || 50,
+        () => request === listRequest,
+      );
+      if (!found || request !== listRequest) return;
+      pagination.page = found.page;
+      params.offset = found.result.offset;
+      forderTemp.value.set(cid.value, found.page);
+      applyFileList(found.result);
+      selectedItems.value = new Set([fid]);
+      lastClickedId.value = fid;
+      pendingScroll = fid;
+      await nextTick();
+      if (request === listRequest) scrollToSelection();
+    } catch (error) {
+      if (request === listRequest) {
+        message.error(error instanceof Error ? error.message : '打开目录失败');
+        pagination.page = 1;
+        await getFileList();
+      }
+    } finally {
+      if (request === listRequest) loading.value = false;
+    }
   }
 
   function refresh() {
@@ -870,6 +1015,7 @@
   }
 
   function getMediaSource(): MediaSource {
+    if (props.searchSource) return { kind: 'search', params: { ...props.searchSource.params } };
     return {
       kind: 'files',
       params: { ...getListParams(), cur: props.starred || params.type ? 0 : 1 },

@@ -31,16 +31,17 @@ export const useModalQuerySync = (
   });
 
   // URL → 浮层状态：响应浏览器前进 / 后退带来的变化。
-  watch(
-    () => route.query[key],
-    (value) => {
-      if (!enabled()) return;
+  watch([() => route.query[key], enabled], ([value, isEnabled], [, wasEnabled]) => {
+    if (!isEnabled) {
+      // 缓存页面停用时只关闭自己的浮层，show watcher 不会反向清理其它页面的 URL。
+      if (wasEnabled) show.value = false;
+      return;
+    }
 
-      if (value === undefined && show.value) {
-        show.value = false;
-      } else if (value !== undefined && !show.value) {
-        show.value = true;
-      }
-    },
-  );
+    if (value === undefined && show.value) {
+      show.value = false;
+    } else if (value !== undefined && !show.value) {
+      show.value = true;
+    }
+  });
 };

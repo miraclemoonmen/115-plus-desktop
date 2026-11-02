@@ -59,9 +59,8 @@
 
 <script setup lang="ts">
   import type { AuthDeviceCodeResponseData } from '@/api/types/user';
-  import { authDeviceCode, deviceCodeToToken, qrCodeStatus, userInfo } from '@/api/user';
-  import { useUserStore } from '@/store/user';
-  import { randomInt } from 'es-toolkit';
+  import { authDeviceCode, deviceCodeToToken, qrCodeStatus } from '@/api/user';
+  import { delay, randomInt } from 'es-toolkit';
 
   const themeVars = useThemeVars();
   const codeVerifier = ref('');
@@ -80,7 +79,6 @@
   const loginError = ref('');
   let loginGeneration = 0;
   let pendingStatus: ReturnType<typeof qrCodeStatus> | undefined;
-  const userStore = useUserStore();
   const message = useMessage();
   const router = useRouter();
 
@@ -137,6 +135,7 @@
   };
 
   const getQrCodeStatus = async (generation: number) => {
+    let failures = 0;
     try {
       while (generation === loginGeneration) {
         pendingStatus = qrCodeStatus({
@@ -144,8 +143,20 @@
           sign: qrCodeData.value.sign,
           time: qrCodeData.value.time,
         });
-        const res = await pendingStatus;
+        let res;
+        try {
+          res = await pendingStatus;
+        } catch (error) {
+          if (generation !== loginGeneration) return;
+          // 状态查询是长轮询，短暂网络中断后继续查询同一个二维码。
+          // 业务错误（如二维码失效）交给外层处理，不重试。
+          if ((error !== null && typeof error === 'object' && 'state' in error) || ++failures > 3)
+            throw error;
+          await delay(1000);
+          continue;
+        }
         if (generation !== loginGeneration) return;
+        failures = 0;
         console.info('[login]', { step: 'scan-status', status: res.data.status ?? 0 });
         if (!res.data.status) continue;
         if (res.data.status === 1) {
@@ -154,7 +165,8 @@
           console.info('[login]', { step: 'exchange-token' });
           await getToken();
           if (generation !== loginGeneration) return;
-          await getUserInfo();
+          message.success('登录成功！');
+          await router.replace({ name: 'Home' });
           return;
         } else {
           isScanSuccess.value = false;
@@ -178,13 +190,6 @@
       uid: qrCodeData.value.uid,
       code_verifier: codeVerifier.value,
     });
-  };
-
-  const getUserInfo = async () => {
-    const res = await userInfo();
-    userStore.userInfo = res.data;
-    message.success('登录成功！');
-    await router.replace({ name: 'Home' });
   };
 
   const generateRandomString = (length: number) => {

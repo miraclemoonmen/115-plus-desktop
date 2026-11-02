@@ -161,7 +161,7 @@
                     ></template>
                   </NButton>
                 </template>
-                打开所在位置
+                打开本地文件夹
               </NTooltip>
               <NTooltip>
                 <template #trigger>
@@ -335,7 +335,7 @@
       if (item.path) await revealItemInDir(item.path);
     } catch (e) {
       console.error(e);
-      message.error('打开文件失败，请检查文件是否存在');
+      message.error('打开本地文件夹失败，请检查文件是否存在');
     }
   };
 

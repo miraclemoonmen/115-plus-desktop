@@ -7,10 +7,11 @@
     viewMode: ViewMode;
     loading: boolean;
     selectedItems: Set<string>;
-    sortConfig: SortConfig;
+    sortConfig?: SortConfig;
     showCheckbox: boolean;
     columns: ListColumn[];
     sortDisabled: boolean;
+    emptyDescription?: string;
   }>();
 
   const emit = defineEmits<{
@@ -27,6 +28,16 @@
   function isSelected(item: MyFile, selectedItems: Set<string>): boolean {
     return selectedItems.has(item.fid);
   }
+
+  const rootRef = useTemplateRef('rootRef');
+  const scrollbarRef = useTemplateRef('scrollbarRef');
+  function scrollToFile(fid: string) {
+    const element = Array.from(
+      rootRef.value?.querySelectorAll<HTMLElement>('[data-file-id]') || [],
+    ).find((item) => item.dataset.fileId === fid);
+    if (element) scrollbarRef.value?.scrollTo({ top: element.offsetTop });
+  }
+  defineExpose({ scrollToFile });
 
   function handleBgClick(e: MouseEvent) {
     const target = e.target as HTMLElement;
@@ -45,6 +56,7 @@
 
 <template>
   <div
+    ref="rootRef"
     class="flex-1 flex flex-col overflow-hidden relative"
     @click="handleBgClick"
     @contextmenu.prevent="handleBgContextMenu"
@@ -65,12 +77,12 @@
     <!-- 空状态 -->
     <NEmpty
       v-if="!loading && items.length === 0"
-      description="当前文件夹为空"
+      :description="emptyDescription || '当前文件夹为空'"
       class="flex-1 flex justify-center items-center"
     />
 
     <NSpin v-else :show="loading" class="flex-1 overflow-hidden" content-class="h-full">
-      <NScrollbar class="h-full">
+      <NScrollbar ref="scrollbarRef" class="h-full" content-class="relative">
         <!-- 网格视图 -->
         <div
           v-if="viewMode === 'grid' && items.length > 0"
@@ -89,7 +101,11 @@
             @dblclick="(_item: MyFile) => emit('dblclickItem', _item)"
             @contextmenu="(_item: MyFile, e: MouseEvent) => emit('contextmenuItem', _item, e)"
             @check="(_item: MyFile, e: MouseEvent) => emit('checkItem', _item, e)"
-          />
+          >
+            <template v-if="$slots.name" #name="slotProps"
+              ><slot name="name" v-bind="slotProps"
+            /></template>
+          </FileItemView>
         </div>
 
         <!-- 列表视图 -->
@@ -106,7 +122,11 @@
             @dblclick="(_item: MyFile) => emit('dblclickItem', _item)"
             @contextmenu="(_item: MyFile, e: MouseEvent) => emit('contextmenuItem', _item, e)"
             @check="(_item: MyFile, e: MouseEvent) => emit('checkItem', _item, e)"
-          />
+          >
+            <template v-if="$slots.name" #name="slotProps"
+              ><slot name="name" v-bind="slotProps"
+            /></template>
+          </FileItemView>
         </div>
       </NScrollbar>
     </NSpin>

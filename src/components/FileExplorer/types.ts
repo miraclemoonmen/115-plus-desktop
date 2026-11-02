@@ -30,6 +30,7 @@ export type ToolbarAction =
 /** 右键菜单可控制的功能项 */
 export type ContextMenuAction =
   | 'open'
+  | 'openLocation'
   | 'reload'
   | 'download'
   | 'uploadFile'
@@ -40,6 +41,20 @@ export type ContextMenuAction =
   | 'detail'
   | 'delete'
   | 'toggleStar';
+
+export const fileContextMenuActions: ContextMenuAction[] = [
+  'open',
+  'reload',
+  'download',
+  'uploadFile',
+  'copy',
+  'move',
+  'rename',
+  'batchRename',
+  'detail',
+  'delete',
+  'toggleStar',
+];
 
 /** 列表模式可展示的列（name 始终展示） */
 export type ListColumn = 'size' | 'type' | 'createTime' | 'modifyTime';

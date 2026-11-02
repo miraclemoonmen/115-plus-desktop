@@ -53,9 +53,11 @@ const { onAuthRequired, onResponseRefreshToken } = createServerTokenAuthenticati
     method.config.headers.Authorization = `Bearer ${userStore.accessToken}`;
   },
   login: async (response, _method) => {
+    if (response.status >= 400) return;
     const userStore = useUserStoreWithOut();
 
     const json: ResponseData<DeviceCodeToTokenResponseData> = await response.clone().json();
+    if (!json.state) return;
     userStore.accessToken = json.data.access_token;
     userStore.refreshToken = json.data.refresh_token;
     userStore.expiresIn = json.data.expires_in;
@@ -125,7 +127,8 @@ export const alovaInst = createAlova({
       return json;
     },
     onError: (err, _method) => {
-      message.error(err instanceof Error ? err.message : JSON.stringify(err));
+      if (!_method.meta?.silentError)
+        message.error(err instanceof Error ? err.message : JSON.stringify(err));
       throw err;
     },
     onComplete: async (_method) => {

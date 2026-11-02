@@ -23,6 +23,7 @@
       v-model:sort-config="userStore.homeSortConfig"
       :columns="['size', 'createTime', 'modifyTime']"
       :starred="starred"
+      :locate-id="locateId"
       :show-breadcrumb="!starred && cid !== '0'"
       :toolbar="
         starred
@@ -62,11 +63,9 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { CloudUploadOutlined } from '@vicons/antd';
   import type { MyFile } from '@/api/types/file';
-  import { useDownloadManager } from '@/composables/useDownloadManager';
-  import { assertDownloadName } from '@/utils/downloadPath';
+  import { useDownloadActions } from '@/composables/useDownloadActions';
   import { useUploadManager } from '@/composables/useUploadManager';
   import { useUserStore } from '@/store/user';
-  import { useSettingStore } from '@/store/setting';
   import { useFilePreview } from '@/composables/useFilePreview';
 
   const route = useRoute();
@@ -74,14 +73,16 @@
   const starred = computed(() => route.query.star === '1');
   const message = useMessage();
   const userStore = useUserStore();
-  const settingStore = useSettingStore();
   const explorerRef = useTemplateRef('explorerRef');
+  const locateId = computed(() =>
+    typeof route.query.locate === 'string' ? route.query.locate : undefined,
+  );
   // 目录由路由 query 承载：初次加载时从 URL 恢复，之后的目录切换都会写回 URL，
   // 使浏览器 / 鼠标侧键的回退能逐级返回浏览过的目录。
   const cid = ref(route.query.fid ? String(route.query.fid) : '0');
   const isDragging = ref(false);
 
-  const { download: downloadFile, batchDownload: batchDownloadFiles } = useDownloadManager();
+  const { handleDownload, handleBatchDownload } = useDownloadActions();
 
   const { uploadFiles: uploadFilesToCloud, uploadFolder: uploadFolderToCloud } = useUploadManager();
 
@@ -109,12 +110,18 @@
   });
 
   // 目录导航委托给路由（见 FileExplorer 的 defer-navigation）：URL 变化后再驱动列表加载。
-  // 无 fid 的历史条目对应根目录；从其它页面切回主页（fid 无变化）时不会触发，从而保留当前目录。
+  // 仅目录、星标模式或页面变化时加载，开关搜索等弹窗不重置列表；无 fid 对应根目录。
   watch(
-    () => [route.query.fid, starred.value] as const,
-    ([fid, star], [, previousStar]) => {
+    [() => route.query.fid, () => starred.value, () => route.name, () => locateId.value],
+    ([fid, star], [, previousStar, previousName]) => {
       if (route.name !== 'Home') return;
-      explorerRef.value?.navigate(fid ? String(fid) : '0', star !== previousStar);
+      void explorerRef.value
+        ?.navigate(
+          fid ? String(fid) : '0',
+          previousName === 'Home' && star !== previousStar,
+          locateId.value,
+        )
+        .catch(() => {});
     },
     { flush: 'post' },
   );
@@ -125,6 +132,7 @@
 
     const query = { ...route.query };
     delete query.star;
+    delete query.locate;
     if (targetCid === '0') delete query.fid;
     else query.fid = targetCid;
     router.push({ name: 'Home', query });
@@ -143,50 +151,6 @@
   };
 
   // ============ 下载 ============
-
-  const handleDownload = async (file: MyFile) => {
-    try {
-      let targetPath: string | undefined;
-      if (settingStore.downloadSetting.askSavePath) {
-        assertDownloadName(file.fn);
-        const dir = await open({
-          directory: true,
-          multiple: false,
-          title: '选择保存目录',
-          defaultPath: settingStore.downloadSetting.downloadPath || undefined,
-        });
-        if (!dir) return;
-        targetPath = `${dir}/${file.fn}`;
-      }
-      message.info('正在获取下载链接，可在下载列表中查看下载进度');
-      await downloadFile(file, targetPath);
-    } catch (error) {
-      console.error(error);
-      message.error(error instanceof Error ? error.message : '下载任务添加失败');
-    }
-  };
-
-  const handleBatchDownload = async (files: MyFile[]) => {
-    if (files.length === 0) return;
-    try {
-      let targetDir: string | undefined;
-      if (settingStore.downloadSetting.askSavePath) {
-        const dir = await open({
-          directory: true,
-          multiple: false,
-          title: '选择保存目录',
-          defaultPath: settingStore.downloadSetting.downloadPath || undefined,
-        });
-        if (!dir) return;
-        targetDir = dir;
-      }
-      message.info(`正在添加 ${files.length} 个文件到下载队列，可在下载列表中查看进度`);
-      await batchDownloadFiles(files, targetDir);
-    } catch (error) {
-      console.error(error);
-      message.error(error instanceof Error ? error.message : '批量下载任务添加失败');
-    }
-  };
 
   // ============ 上传 ============
 

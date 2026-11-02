@@ -46,6 +46,7 @@
   <div
     v-if="viewMode === 'grid'"
     data-file-item
+    :data-file-id="item.fid"
     class="group relative flex flex-col items-center p-3 cursor-pointer transition-all duration-150 select-none rounded-(--border-radius)"
     :class="
       selected
@@ -85,6 +86,7 @@
   <div
     v-else
     data-file-item
+    :data-file-id="item.fid"
     class="group flex items-center px-3 py-1.5 cursor-pointer transition-colors duration-100 select-none border-b border-(--divider-color)"
     :class="
       selected ? 'bg-(--primary-color)/10' : 'hover:bg-(--hover-color) active:bg-(--pressed-color)'

@@ -11,7 +11,7 @@ export const useExplorerShortcuts = createGlobalState(() => {
   return {
     /** 登记一个实例，后登记的排在栈顶。 */
     register: (token: symbol) => {
-      owners.push(token);
+      if (!owners.includes(token)) owners.push(token);
     },
 
     /** 移除一个实例。 */

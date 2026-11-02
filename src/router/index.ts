@@ -21,6 +21,11 @@ const router = createRouter({
           component: () => import('@/views/Home/HomeView.vue'),
         },
         {
+          path: 'search',
+          name: 'Search',
+          component: () => import('@/views/Search/SearchView.vue'),
+        },
+        {
           path: 'recycleBin',
           name: 'RecycleBin',
           component: () => import('@/views/RecycleBin/RecycleBin.vue'),
