@@ -130,7 +130,6 @@
     SettingOutlined,
     DownloadOutlined,
     UploadOutlined,
-    InfoCircleOutlined,
     MenuFoldOutlined,
     MenuUnfoldOutlined,
     StarOutlined,
@@ -222,15 +221,6 @@
       icon: () => (
         <NIcon>
           <SettingOutlined />
-        </NIcon>
-      ),
-    },
-    {
-      label: () => <RouterLink to="/about">关于</RouterLink>,
-      key: 'About',
-      icon: () => (
-        <NIcon>
-          <InfoCircleOutlined />
         </NIcon>
       ),
     },

@@ -1,5 +1,17 @@
 # 更新日志
 
+## [1.1.0-rc.6](https://github.com/miraclemoonmen/115-plus-desktop/compare/v1.1.0-rc.5...v1.1.0-rc.6) (2026-11-05)
+
+### ✨ 功能调整
+
+- 移除「关于」的侧栏入口、路由和完整页面。
+- 清理该页面专用的作者头像及自动生成的无用组件声明。
+
+### 🧪 验证与构建
+
+- 34 项前端回归、代码规范、类型检查和前端生产构建通过。
+- 提供 Windows x64、macOS Apple Silicon / Intel 和 Linux x64 四平台便携包。
+
 ## [1.1.0-rc.5](https://github.com/miraclemoonmen/115-plus-desktop/compare/v1.1.0-rc.4...v1.1.0-rc.5) (2026-11-02)
 
 ### ✨ 功能调整
