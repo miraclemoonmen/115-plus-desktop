@@ -92,7 +92,7 @@ fn runtime_directory(directory: &Path) -> Result<PathBuf, String> {
     for name in ["msedgewebview2.exe", "msedge.dll", "icudtl.dat"] {
         if !runtime.join(name).is_file() {
             return Err(
-                "未找到完整的内置 WebView2。请重新解压便携包，保留 runtime 文件夹。".into(),
+                "未找到完整的内置 WebView2。请下载并解压运行库包，确保 runtime 与 115+.exe 位于同一文件夹。".into(),
             );
         }
     }

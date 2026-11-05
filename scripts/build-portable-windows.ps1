@@ -51,15 +51,20 @@ try {
     }
     Write-Output $dependencies
     $dependencies | Set-Content (Join-Path $output 'exe-dependencies.txt')
-    Copy-Item $runtimeSource (Join-Path $stage 'runtime') -Recurse
-    New-Item (Join-Path $stage 'data') -ItemType Directory | Out-Null
     Copy-Item 'docs/portable.md' (Join-Path $stage '使用说明.md')
     $archive = Join-Path $output "115+_$($package.version)_windows-x64-portable.zip"
     if (Test-Path $archive) { Remove-Item $archive }
     Compress-Archive -Path $stage -DestinationPath $archive -CompressionLevel Optimal
-    $digest = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-    "$digest  $(Split-Path $archive -Leaf)" | Set-Content "$archive.sha256" -Encoding utf8NoBOM
-    Write-Output "便携包：$archive"
+
+    $runtimeArchive = Join-Path $output "115+_WebView2_$($runtime.version)_windows-x64-runtime.zip"
+    if (Test-Path $runtimeArchive) { Remove-Item $runtimeArchive }
+    Compress-Archive -Path $runtimeSource -DestinationPath $runtimeArchive -CompressionLevel Optimal
+
+    foreach ($file in @($archive, $runtimeArchive)) {
+        $digest = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+        "$digest  $(Split-Path $file -Leaf)" | Set-Content "$file.sha256" -Encoding utf8NoBOM
+        Write-Output "便携包：$file"
+    }
 } finally {
     $env:RUSTFLAGS = $originalRustFlags
     Pop-Location

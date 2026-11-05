@@ -86,7 +86,7 @@ jobs:
           pnpm check
           pnpm test:rust
           cargo test --manifest-path src-tauri/Cargo.toml --lib --features portable --locked
-      - name: Build Windows portable ZIP with fixed WebView2
+      - name: Build Windows application and WebView2 ZIPs
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/build-portable-windows.ps1
@@ -97,6 +97,8 @@ jobs:
           path: |
             src-tauri/target/portable/*-portable.zip
             src-tauri/target/portable/*-portable.zip.sha256
+            src-tauri/target/portable/*-runtime.zip
+            src-tauri/target/portable/*-runtime.zip.sha256
           if-no-files-found: error
       - name: Test Windows portable application
         if: runner.os == 'Windows' && !inputs.skip_runtime_tests
@@ -105,6 +107,7 @@ jobs:
           $testRoot = Join-Path $env:RUNNER_TEMP '便携测试 含空格'
           New-Item $testRoot -ItemType Directory -Force | Out-Null
           Expand-Archive -Path (Get-ChildItem 'src-tauri/target/portable/*-portable.zip').FullName -DestinationPath $testRoot
+          Expand-Archive -Path (Get-ChildItem 'src-tauri/target/portable/*-runtime.zip').FullName -DestinationPath (Join-Path $testRoot '115+')
           node scripts/test-portable-windows.mjs (Join-Path $testRoot '115+') portable-smoke-results.json
           if ($LASTEXITCODE -ne 0) { throw 'Windows 便携运行测试失败' }
       - name: Build macOS portable archive
@@ -167,6 +170,8 @@ jobs:
           $testRoot = Join-Path $env:RUNNER_TEMP '便携测试 含空格'
           New-Item $testRoot -ItemType Directory -Force | Out-Null
           Expand-Archive $archive.FullName -DestinationPath $testRoot
+          $runtime = Get-ChildItem portable-download/*-runtime.zip
+          if ($runtime) { Expand-Archive $runtime.FullName -DestinationPath (Join-Path $testRoot '115+') }
           node scripts/test-portable-windows.mjs (Join-Path $testRoot '115+') portable-smoke-results.json
           if ($LASTEXITCODE -ne 0) { throw 'Windows 2022 便携运行测试失败' }
       - uses: actions/upload-artifact@v7
@@ -201,6 +206,8 @@ jobs:
           $testRoot = Join-Path $env:RUNNER_TEMP '便携测试 含空格'
           New-Item $testRoot -ItemType Directory -Force | Out-Null
           Expand-Archive (Get-ChildItem portable-download/*-portable.zip).FullName -DestinationPath $testRoot
+          $runtime = Get-ChildItem portable-download/*-runtime.zip
+          if ($runtime) { Expand-Archive $runtime.FullName -DestinationPath (Join-Path $testRoot '115+') }
           node scripts/test-portable-windows.mjs (Join-Path $testRoot '115+') portable-smoke-results.json
           if ($LASTEXITCODE -ne 0) { throw '便携包验证失败' }
       - uses: actions/upload-artifact@v7

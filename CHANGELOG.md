@@ -1,5 +1,14 @@
 # 更新日志
 
+## [1.1.0-rc.7](https://github.com/miraclemoonmen/115-plus-desktop/compare/v1.1.0-rc.6...v1.1.0-rc.7) (2026-11-05)
+
+### 📦 便携包调整
+
+- Windows 程序包与 WebView2 运行库包分开提供，日常升级只需下载程序包。
+- 程序包仅包含 `115+.exe` 和使用说明，首次启动时创建 `data`；更新时保留已有的 `runtime` 和 `data`。
+- WebView2 沿用 `156.0.4314.56`，已有完整便携包可以复用原运行库，无需重新下载。
+- 补充首次组合解压、升级说明及运行库缺失提示；其他平台沿用原有便携分发。
+
 ## [1.1.0-rc.6](https://github.com/miraclemoonmen/115-plus-desktop/compare/v1.1.0-rc.5...v1.1.0-rc.6) (2026-11-05)
 
 ### ✨ 功能调整
